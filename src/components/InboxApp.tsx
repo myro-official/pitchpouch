@@ -17,7 +17,7 @@ type Filter = "all" | GroupId;
 const ME = { handle: "beauty.min", followers: "7.2만" };
 
 type Sort = "urgent" | "latest";
-type Status = "all" | "unread" | "todo";
+type Status = "all" | "unread";
 type Preset = "all" | "today" | "7d" | "30d" | "custom";
 type Range = { preset: Preset; from: string; to: string };
 
@@ -58,6 +58,14 @@ const short = (d: string) => (d ? `${Number(d.slice(5, 7))}/${Number(d.slice(8, 
 const rangeLabel = (r: Range) =>
   r.preset === "custom" ? `${short(r.from) || "처음"} ~ ${short(r.to) || "오늘"}` : PRESETS[r.preset];
 
+const URGENCY = ["여유", "며칠 안에", "이번 주", "오늘 안에"];
+const GROUP_LINE: Record<GroupId, string> = {
+  gain: "조건을 보고 수락 여부를 정하는 제안이에요.",
+  rel: "사람과 이어지는 연락이에요.",
+  todo: "직접 확인하고 답해 줘야 하는 일이에요.",
+  junk: "답하지 않아도 되는 메시지예요.",
+};
+
 const groupClass = (id: GroupId) => `c-${GROUPS.find((g) => g.id === id)?.tone || "none"}`;
 
 // 급한 순은 같은 급함 안에서 최신순, 최신순은 받은 시각만 본다
@@ -67,9 +75,8 @@ const sorter = (sort: Sort) => (a: Msg, b: Msg) =>
 function Pills({ m }: { m: Msg }) {
   return (
     <div className="pills">
-      {m.done && <i className="ok">확인 완료</i>}
       {m.reply && <i>답장 필요</i>}
-      {m.urgency >= 2 && <i className="warn">급함 {m.urgency}</i>}
+      {m.urgency >= 2 && <i className="warn">{m.urgency === 3 ? "오늘 안에" : "이번 주"}</i>}
       {m.terms && <i>조건 있음</i>}
     </div>
   );
@@ -115,7 +122,6 @@ export function InboxApp() {
   const [range, setRange] = useState<Range>({ preset: "all", from: "", to: "" });
   const [draft, setDraft] = useState({ from: "", to: "" });
   const [readSet, setReadSet] = useState<Set<string>>(new Set());
-  const [doneSet, setDoneSet] = useState<Set<string>>(new Set());
   const [limits, setLimits] = useState<Record<string, number>>({});
   const [connected, setConnected] = useState(true);
   const [linking, setLinking] = useState(false);
@@ -130,9 +136,8 @@ export function InboxApp() {
         ...m,
         group: overrides[m.id] ?? m.group,
         read: m.read || readSet.has(m.id),
-        done: m.done || doneSet.has(m.id),
       })),
-    [extra, overrides, readSet, doneSet],
+    [extra, overrides, readSet],
   );
   const open = msgs.find((m) => m.id === openId) ?? null;
 
@@ -165,15 +170,6 @@ export function InboxApp() {
     setFilter("all");
     showToast(`${added.length}개를 분류했어요`);
   };
-  const toggleDone = (id: string, done: boolean) => {
-    setDoneSet((d) => {
-      const next = new Set(d);
-      if (done) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-    showToast(done ? "확인 안 함으로 되돌렸어요" : "확인 완료로 표시했어요");
-  };
   const link = () => {
     setLinking(true);
     setTimeout(() => {
@@ -184,12 +180,11 @@ export function InboxApp() {
 
   const inPeriod = msgs.filter((m) => inRange(m, range, now));
   const unreadN = inPeriod.filter((m) => !m.read).length;
-  const notDoneN = inPeriod.filter((m) => !m.done).length;
-  const needReply = inPeriod.filter((m) => m.reply && !m.done).length;
-  const urgent = inPeriod.filter((m) => m.urgency >= 2 && !m.done).length;
-  const withTerms = inPeriod.filter((m) => m.terms && !m.done).length;
+  const needReply = inPeriod.filter((m) => m.reply).length;
+  const urgent = inPeriod.filter((m) => m.urgency >= 2).length;
+  const withTerms = inPeriod.filter((m) => m.terms).length;
   const unreadAll = msgs.filter((m) => !m.read).length;
-  const scoped = inPeriod.filter((m) => (status === "unread" ? !m.read : status === "todo" ? !m.done : true));
+  const scoped = inPeriod.filter((m) => (status === "unread" ? !m.read : true));
   const inGroup = (g: GroupId) => scoped.filter((m) => m.group === g);
   const visible = (g: GroupId) => inGroup(g).sort(sorter(sort));
 
@@ -223,7 +218,6 @@ export function InboxApp() {
   const statuses: [Status, string][] = [
     ["all", "전체"],
     ["unread", `안 읽음 ${unreadN}`],
-    ["todo", `확인 안 함 ${notDoneN}`],
   ];
 
   const shown = filter === "all" ? GROUPS : GROUPS.filter((g) => g.id === filter);
@@ -251,7 +245,6 @@ export function InboxApp() {
           onBack={() => history.back()}
           onChange={() => setSheet(true)}
           onGo={() => goChat(open)}
-          onToggleDone={() => toggleDone(open.id, open.done)}
         />
       ) : tab === "inbox" ? (
         <section className="sec">
@@ -294,7 +287,7 @@ export function InboxApp() {
             </div>
           </div>
 
-          <div className="seg" style={{ marginTop: 14, ["--n" as string]: 3, ["--i" as string]: statuses.findIndex(([k]) => k === status) }}>
+          <div className="seg" style={{ marginTop: 14, ["--n" as string]: 2, ["--i" as string]: statuses.findIndex(([k]) => k === status) }}>
             <div className="thumb" />
             {statuses.map(([k, label]) => (
               <button key={k} className={status === k ? "on" : ""} onClick={() => setStatus(k)}>
@@ -483,7 +476,6 @@ function Detail({
   onBack,
   onChange,
   onGo,
-  onToggleDone,
 }: {
   m: Msg;
   shown: boolean;
@@ -492,7 +484,6 @@ function Detail({
   onBack: () => void;
   onChange: () => void;
   onGo: () => void;
-  onToggleDone: () => void;
 }) {
   const g = GROUPS.find((x) => x.id === m.group)!;
   return (
@@ -526,43 +517,42 @@ function Detail({
       </section>
 
       <section className="sec">
-        <h2 className="sec-title">이렇게 읽었어요</h2>
-        <p className="lead">{m.reason}</p>
-        {m.source && (
-          <p className="caption">
-            {m.source === "jev" ? "Jev가 분류했어요" : m.source === "ai" ? "Claude가 분류했어요" : "AI를 쓰지 못해 키워드 규칙으로 분류했어요"}
-          </p>
-        )}
-        {m.jev && (
-          <p className="caption">
-            Jev 판정: {m.jev.group === "unclear" ? "애매함" : GROUPS.find((x) => x.id === m.jev!.group)?.label} · 신뢰도 {Math.round(m.jev.confidence * 100)}%
-            {m.jev.accepted
-              ? " (기준 이상, Jev 판정 사용)"
-              : m.jev.why === "unclear"
-                ? " (애매함으로 판정, Claude가 다시 분류)"
-                : m.jev.why === "risk" || m.jev.why === "veto"
-                  ? " (사기 신호 감지, Claude가 다시 분류)"
-                  : " (기준 미만, Claude가 다시 분류)"}
-          </p>
-        )}
+        <h2 className="sec-title">한눈에 보기</h2>
+        <p className="lead">{GROUP_LINE[m.group]}</p>
         <div className="stat-row">
           <div className="stat">
-            <b>{m.reply ? "예" : "아니오"}</b>
-            <small>답장 필요</small>
+            <b>{m.reply ? "필요" : "불필요"}</b>
+            <small>답장</small>
           </div>
           <div className={`stat ${m.urgency === 3 ? "hot" : m.urgency === 2 ? "mid" : ""}`}>
-            <b>{m.urgency}</b>
-            <small>급한 정도 (0~3)</small>
+            <b>{URGENCY[m.urgency]}</b>
+            <small>급한 정도</small>
           </div>
           <div className="stat">
-            <b>{m.terms ? "예" : "아니오"}</b>
+            <b>{m.terms ? "있음" : "없음"}</b>
             <small>금액·조건</small>
           </div>
         </div>
         {m.termsNote && <div className="note" style={{ marginTop: 12 }}>적힌 조건: {m.termsNote}</div>}
-        <button className="btn ghost" style={{ marginTop: 16 }} onClick={onToggleDone}>
-          {m.done ? "확인 안 함으로 되돌리기" : "확인 완료로 표시"}
-        </button>
+        <details className="dev">
+          <summary>분류 근거 보기</summary>
+          <p>{m.reason}</p>
+          {m.source && (
+            <p>{m.source === "jev" ? "Jev가 분류했어요" : m.source === "ai" ? "Claude가 분류했어요" : "AI를 쓰지 못해 키워드 규칙으로 분류했어요"}</p>
+          )}
+          {m.jev && (
+            <p>
+              Jev 판정: {m.jev.group === "unclear" ? "애매함" : GROUPS.find((x) => x.id === m.jev!.group)?.label} · 신뢰도 {Math.round(m.jev.confidence * 100)}%
+              {m.jev.accepted
+                ? " (기준 이상, Jev 판정 사용)"
+                : m.jev.why === "unclear"
+                  ? " (애매함으로 판정, Claude가 다시 분류)"
+                  : m.jev.why === "risk" || m.jev.why === "veto"
+                    ? " (사기 신호 감지, Claude가 다시 분류)"
+                    : " (기준 미만, Claude가 다시 분류)"}
+            </p>
+          )}
+        </details>
       </section>
 
       <div className="cta">
