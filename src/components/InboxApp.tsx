@@ -291,7 +291,7 @@ export function InboxApp() {
             const collapsed = filter === "all" && folded.has(g.id);
             const lim = limits[g.id] ?? (filter === "all" ? 5 : 30);
             return (
-              <div key={g.id}>
+              <div key={g.id} className="group-block">
                 <div className="title-row">
                   <p className="group-title">
                     {g.label}
