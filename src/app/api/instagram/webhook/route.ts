@@ -49,7 +49,7 @@ function validSignature(raw: Buffer, header: string | null) {
 async function ingest(mid: string, senderId: string, text: string) {
   // classifyDm은 Jev나 Claude가 실패해도 키워드 규칙으로 결과를 내서, 분류 때문에 저장이 빠지지 않는다.
   const [who, { result }] = await Promise.all([profile(senderId), classifyDm(text)]);
-  await saveDm(mid, { ...who, text, ...result });
+  await saveDm(mid, { ...who, text, senderId, ...result });
 }
 
 // 보낸 사람의 아이디. 이 토큰으로는 프로필 조회(/{IGSID})가 막혀서 대화 참여자 목록에서 찾는다.

@@ -1,21 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import {
-  type ClassifyResponse,
-  type ClassifyUsage,
-  DEMO,
-  type GroupId,
-  GROUPS,
-  type Msg,
-} from "@/lib/inbox";
-import { IconBack, IconChat, IconCheck, IconEmpty, IconInbox, IconSettings, IconShield } from "./icons";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { type ClassifyResponse, type ClassifyUsage, type GroupId, GROUPS, type Msg } from "@/lib/inbox";
+import { RangeCalendar } from "./RangeCalendar";
+import { createClient } from "@/lib/supabase/client";
+import { IconBack, IconCheck, IconEmpty, IconSettings, IconShield } from "./icons";
 
 type Tab = "inbox" | "settings";
 type Filter = "all" | GroupId;
 
-// 인스타를 연결하면 Meta에서 받아올 프로필. 사진이 없으면 이름의 첫 글자를 보여 준다.
-const ME = { name: "뷰티민", handle: "beauty.min", followers: "7.2만", picture: "/profile.jpg" };
+// 연결된 인스타 계정의 프로필(/api/profile). 사진이 없으면 이름의 첫 글자를 보여 준다.
+type Profile = { name: string; handle: string; picture: string; followers: number };
+const fmtFollowers = (n: number) => (n >= 10_000 ? `${(n / 10_000).toFixed(1).replace(/\.0$/, "")}만` : n.toLocaleString("ko-KR"));
 
 type Sort = "urgent" | "latest";
 type Status = "all" | "unread";
@@ -63,13 +59,6 @@ const short = (d: string) => (d ? `${Number(d.slice(5, 7))}/${Number(d.slice(8, 
 const rangeLabel = (r: Range) =>
   r.preset === "custom" ? `${short(r.from) || "처음"} ~ ${short(r.to) || "오늘"}` : PRESETS[r.preset];
 
-const URGENCY = ["여유", "며칠 안에", "이번 주", "오늘 안에"];
-const GROUP_LINE: Record<GroupId, string> = {
-  gain: "조건을 보고 수락 여부를 정하는 제안이에요.",
-  rel: "사람과 이어지는 연락이에요.",
-  todo: "직접 확인하고 답해 줘야 하는 일이에요.",
-  junk: "답하지 않아도 되는 메시지예요.",
-};
 
 // 개발자 모드: 분류 근거, 사용량 안내, DM 직접 분류 도구를 보여 준다. 저장이 막힌 브라우저에서도 이번 방문 동안은 동작한다.
 const DEV_KEY = "pitchpouch_dev";
@@ -166,22 +155,44 @@ export function InboxApp() {
   const [usage, setUsage] = useState<ClassifyUsage | null>(null);
 
   const [live, setLive] = useState<Msg[]>([]);
-  // 웹훅이 저장한 실제 인스타 DM을 5초마다 가져와 데모 DM 앞에 둔다.
-  useEffect(() => {
-    const load = () =>
+  const [authed, setAuthed] = useState<boolean | null>(null); // null: 아직 모름
+  // 웹훅이 저장한 실제 인스타 DM을 5초마다 가져온다. 로그인 전이면 401이라 로그인 화면을 띄운다.
+  const loadLive = useCallback(
+    () =>
       fetch("/api/dms", { cache: "no-store" })
-        .then((r) => r.json())
+        .then((r) => {
+          setAuthed(r.status !== 401);
+          return r.ok ? r.json() : { dms: [] };
+        })
         .then((j) => setLive(j.dms ?? []))
-        .catch(() => {});
-    load();
-    const t = setInterval(load, 5000);
+        .catch(() => {}),
+    [],
+  );
+  useEffect(() => {
+    loadLive();
+    const t = setInterval(loadLive, 5000);
     return () => clearInterval(t);
-  }, []);
+  }, [loadLive]);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  useEffect(() => {
+    if (!authed) return;
+    fetch("/api/profile", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setProfile(j.profile ?? null))
+      .catch(() => {});
+  }, [authed]);
+  const logout = async () => {
+    await createClient().auth.signOut();
+    setLive([]);
+    setProfile(null);
+    setAuthed(false);
+    setTab("inbox");
+  };
 
   const now = useNow();
   const msgs = useMemo<Msg[]>(
     () =>
-      [...live, ...extra, ...DEMO].map((m) => ({
+      [...live, ...extra].map((m) => ({
         ...m,
         group: overrides[m.id] ?? m.group,
         read: m.read || readSet.has(m.id),
@@ -194,6 +205,8 @@ export function InboxApp() {
     setOpenId(null);
     setSheet(false);
     setPanel(null);
+    setSettingsView("main");
+    setTab("inbox");
   }, []);
   useEffect(() => {
     window.addEventListener("popstate", goHome);
@@ -204,14 +217,31 @@ export function InboxApp() {
     setToast(msg);
     setTimeout(() => setToast(""), 1800);
   };
+  const openSettings = () => {
+    if (tab === "settings" && !openId) return goHome();
+    setOpenId(null);
+    setSheet(false);
+    setPanel(null);
+    setSettingsView("main");
+    setTab("settings");
+    if (!history.state?.pp) history.pushState({ pp: 1 }, "");
+    window.scrollTo({ top: 0 });
+  };
+  // 실패하면 화면에 띄울 문구를, 성공하면 null을 돌려준다.
+  const sendReply = async (m: Msg, text: string) => {
+    const res = await fetch(`/api/dms/${encodeURIComponent(m.id)}/reply`, { method: "POST", body: JSON.stringify({ text }) });
+    if (res.ok) {
+      showToast("메시지를 보냈어요");
+      return null;
+    }
+    return ((await res.json().catch(() => ({}))) as { error?: string }).error ?? "보내지 못했어요.";
+  };
   const openMsg = (id: string) => {
     setReadSet((r) => new Set(r).add(id));
     setOpenId(id);
     if (!history.state?.pp) history.pushState({ pp: 1 }, "");
     window.scrollTo({ top: 0 });
   };
-  // 목업이라 이동은 안내만 한다. 연동 후에는 해당 대화방 링크로 바꾼다.
-  const goChat = (m: Msg) => showToast(m.pasted ? "연동하면 이 DM의 채팅방으로 이동해요" : `@${m.handle} 채팅방으로 이동해요`);
   const addPasted = (added: Msg[], u: ClassifyUsage) => {
     setExtra([...added, ...extra]);
     setUsage(u);
@@ -231,10 +261,6 @@ export function InboxApp() {
   const today = ymd(now);
   const inPeriod = msgs.filter((m) => inRange(m, range, now));
   const unreadN = inPeriod.filter((m) => !m.read).length;
-  const needReply = inPeriod.filter((m) => m.reply).length;
-  const urgent = inPeriod.filter((m) => m.urgency >= 2).length;
-  const withTerms = inPeriod.filter((m) => m.terms).length;
-  const unreadAll = msgs.filter((m) => !m.read).length;
   const scoped = inPeriod.filter((m) => (status === "unread" ? !m.read : true));
   const inGroup = (g: GroupId) => scoped.filter((m) => m.group === g);
   const visible = (g: GroupId) => inGroup(g).sort(sorter(sort));
@@ -255,9 +281,6 @@ export function InboxApp() {
           </span>
           <span className="caption">{ago(m.minutesAgo, now)}</span>
         </button>
-        <button className="go" aria-label="채팅방으로 이동" onClick={() => goChat(m)}>
-          <IconChat size={20} />
-        </button>
       </div>
     );
   };
@@ -276,11 +299,14 @@ export function InboxApp() {
   return (
     <div className="app">
       <header className="top">
-        <button className="brand home-btn" onClick={() => (goHome(), setTab("inbox"))} aria-label="홈으로">
+        <button className="brand home-btn" onClick={goHome} aria-label="홈으로">
           <span className="brand-mark" style={{ color: "var(--on-brand)" }}>
             <IconShield />
           </span>
           PitchPouch
+        </button>
+        <button className={`icon-btn ${tab === "settings" && !open ? "on" : ""}`} onClick={openSettings} aria-label="설정">
+          <IconSettings size={22} />
         </button>
       </header>
 
@@ -293,26 +319,30 @@ export function InboxApp() {
           dev={dev}
           onBack={() => history.back()}
           onChange={() => setSheet(true)}
-          onGo={() => goChat(open)}
+          onSend={open.senderId ? (text) => sendReply(open, text) : undefined}
         />
+      ) : tab === "inbox" && authed === false ? (
+        <Login onDone={loadLive} />
       ) : tab === "inbox" ? (
         <section className="sec">
           {connected ? (
             <>
-              <div className="profile">
-                {ME.picture ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img className="avatar" src={ME.picture} alt="" />
-                ) : (
-                  <span className="avatar">{ME.name.slice(0, 1)}</span>
-                )}
-                <div>
-                  <b>{ME.name}</b>
-                  <small>
-                    @{ME.handle} · 팔로워 {ME.followers}
-                  </small>
+              {profile && (
+                <div className="profile">
+                  {profile.picture ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img className="avatar" src={profile.picture} alt="" />
+                  ) : (
+                    <span className="avatar">{profile.name.slice(0, 1)}</span>
+                  )}
+                  <div>
+                    <b>{profile.name}</b>
+                    <small>
+                      @{profile.handle} · 팔로워 {fmtFollowers(profile.followers)}
+                    </small>
+                  </div>
                 </div>
-              </div>
+              )}
               <p className="counts">
                 DM <CountUp value={inPeriod.length} />개 · 안 읽은 건 <CountUp value={unreadN} />개
               </p>
@@ -332,21 +362,6 @@ export function InboxApp() {
               {usage.costUsd !== null && usage.ai > 0 && ` · 약 $${usage.costUsd.toFixed(5)}`}
             </div>
           )}
-
-          <div className="stat-row">
-            <div className="stat">
-              <b>{needReply}</b>
-              <small>답장할 것</small>
-            </div>
-            <div className="stat hot">
-              <b>{urgent}</b>
-              <small>급한 것</small>
-            </div>
-            <div className="stat">
-              <b>{withTerms}</b>
-              <small>조건 적힘</small>
-            </div>
-          </div>
 
           <div className="filters">
             <div className="chips scroll">
@@ -368,7 +383,13 @@ export function InboxApp() {
           </div>
 
           <div className="title-row" style={{ marginTop: 10 }}>
-            <button className="sort-btn" onClick={() => setPanel("range")}>
+            <button
+              className="sort-btn"
+              onClick={() => {
+                setDraft(range.preset === "custom" ? { from: range.from, to: range.to } : { from: "", to: "" });
+                setPanel("range");
+              }}
+            >
               기간 · {rangeLabel(range)} ▾
             </button>
             <button className="sort-btn" onClick={() => setPanel("sort")}>
@@ -434,32 +455,11 @@ export function InboxApp() {
           dev={dev}
           onDev={setDev}
           onPaste={() => setSettingsView("paste")}
+          onBack={() => history.back()}
+          onLogout={authed ? logout : undefined}
+          handle={profile?.handle}
         />
       )}
-
-      <nav className="tabbar">
-        {(
-          [
-            ["inbox", "보관함", <IconInbox key="i" />],
-            ["settings", "설정", <IconSettings key="s" />],
-          ] as const
-        ).map(([key, label, icon]) => (
-          <button
-            key={key}
-            className={tab === key && !open ? "on" : ""}
-            onClick={() => {
-              goHome();
-              setSettingsView("main");
-              setTab(key);
-              window.scrollTo({ top: 0 });
-            }}
-          >
-            {icon}
-            {label}
-            {key === "inbox" && unreadAll > 0 && <span className="dot">{unreadAll > 99 ? "99+" : unreadAll}</span>}
-          </button>
-        ))}
-      </nav>
 
       <Sheet open={sheet && !!open} title="분류 바꾸기" onClose={() => setSheet(false)}>
         <div className="sheet-list">
@@ -509,62 +509,36 @@ export function InboxApp() {
       </Sheet>
 
       <Sheet open={panel === "range"} title="기간" onClose={() => setPanel(null)}>
-        <div className="sheet-list">
+        <div className="chips" style={{ marginBottom: 12 }}>
           {(Object.keys(PRESETS) as Exclude<Preset, "custom">[]).map((k) => (
             <button
               key={k}
-              className={`sheet-opt ${range.preset === k ? "on" : ""}`}
+              className={`chip ${range.preset === k ? "on" : ""}`}
               onClick={() => {
                 setRange({ preset: k, from: "", to: "" });
                 setPanel(null);
               }}
             >
               {PRESETS[k]}
-              {range.preset === k && <IconCheck size={18} />}
             </button>
           ))}
         </div>
-        <p className="group-title">직접 설정</p>
-        <div className="field row2" style={{ marginTop: 8 }}>
-          <div>
-            <label className="label">시작일</label>
-            <input
-              className="input date"
-              type="date"
-              value={draft.from}
-              max={draft.to && draft.to < today ? draft.to : today}
-              onChange={(e) => {
-                const max = draft.to && draft.to < today ? draft.to : today;
-                setDraft({ ...draft, from: e.target.value > max ? max : e.target.value });
-              }}
-            />
-          </div>
-          <div>
-            <label className="label">종료일</label>
-            <input
-              className="input date"
-              type="date"
-              value={draft.to}
-              min={draft.from || undefined}
-              max={today}
-              onChange={(e) => {
-                const v = e.target.value;
-                setDraft({ ...draft, to: v > today ? today : draft.from && v && v < draft.from ? draft.from : v });
-              }}
-            />
-          </div>
-        </div>
+        {panel === "range" && <RangeCalendar today={today} from={draft.from} to={draft.to} onChange={(from, to) => setDraft({ from, to })} />}
+        <p className="caption" style={{ marginTop: 10, minHeight: 18 }}>
+          {draft.from ? `${short(draft.from)}${draft.to ? ` ~ ${short(draft.to)}` : " 하루"}` : "시작일과 종료일을 차례로 눌러 주세요"}
+        </p>
         <button
           className="btn"
-          style={{ marginTop: 16 }}
-          disabled={!draft.from && !draft.to}
+          style={{ marginTop: 12 }}
+          disabled={!draft.from}
           onClick={() => {
-            const [from, to] = draft.from && draft.to && draft.from > draft.to ? [draft.to, draft.from] : [draft.from, draft.to];
-            setRange({ preset: "custom", from, to });
+            setRange({ preset: "custom", from: draft.from, to: draft.to || draft.from });
             setPanel(null);
           }}
         >
-          이 기간으로 보기
+          {draft.from
+            ? `이 기간으로 보기 · DM ${msgs.filter((m) => inRange(m, { preset: "custom", from: draft.from, to: draft.to || draft.from }, now)).length}개`
+            : "날짜를 골라 주세요"}
         </button>
       </Sheet>
 
@@ -581,7 +555,7 @@ function Detail({
   dev,
   onBack,
   onChange,
-  onGo,
+  onSend,
 }: {
   m: Msg;
   shown: boolean;
@@ -590,7 +564,7 @@ function Detail({
   dev: boolean;
   onBack: () => void;
   onChange: () => void;
-  onGo: () => void;
+  onSend?: (text: string) => Promise<string | null>;
 }) {
   const g = GROUPS.find((x) => x.id === m.group)!;
   return (
@@ -621,26 +595,6 @@ function Detail({
             </button>
           </div>
         )}
-      </section>
-
-      <section className="sec">
-        <h2 className="sec-title">한눈에 보기</h2>
-        <p className="lead">{GROUP_LINE[m.group]}</p>
-        <div className="stat-row">
-          <div className="stat">
-            <b>{m.reply ? "필요" : "불필요"}</b>
-            <small>답장</small>
-          </div>
-          <div className={`stat ${m.urgency === 3 ? "hot" : m.urgency === 2 ? "mid" : ""}`}>
-            <b>{URGENCY[m.urgency]}</b>
-            <small>급한 정도</small>
-          </div>
-          <div className="stat">
-            <b>{m.terms ? "있음" : "없음"}</b>
-            <small>금액·조건</small>
-          </div>
-        </div>
-        {m.termsNote && <div className="note" style={{ marginTop: 12 }}>적힌 조건: {m.termsNote}</div>}
         {dev && (
           <details className="dev">
             <summary>분류 근거 보기</summary>
@@ -662,14 +616,12 @@ function Detail({
             )}
           </details>
         )}
+        {onSend && <Reply key={m.id} onSend={onSend} />}
       </section>
 
       <div className="cta">
         <button className="btn ghost" onClick={onChange}>
           분류 바꾸기
-        </button>
-        <button className="btn" onClick={onGo}>
-          <IconChat size={18} /> 채팅방으로 이동
         </button>
       </div>
     </>
@@ -684,6 +636,9 @@ function Settings({
   dev,
   onDev,
   onPaste,
+  onBack,
+  onLogout,
+  handle,
 }: {
   connected: boolean;
   linking: boolean;
@@ -692,13 +647,19 @@ function Settings({
   dev: boolean;
   onDev: (on: boolean) => void;
   onPaste: () => void;
+  onBack: () => void;
+  onLogout?: () => void;
+  handle?: string;
 }) {
   return (
     <>
       <section className="sec" style={{ paddingBottom: 0 }}>
-        <h1 className="page-title">설정</h1>
+        <button className="link-btn" onClick={onBack} style={{ display: "flex", alignItems: "center", gap: 2, marginLeft: -6 }}>
+          <IconBack size={18} /> 보관함
+        </button>
+        <h1 className="page-title" style={{ marginTop: 8 }}>설정</h1>
       </section>
-      <Connect connected={connected} linking={linking} onLink={onLink} onUnlink={onUnlink} />
+      <Connect connected={connected} linking={linking} onLink={onLink} onUnlink={onUnlink} handle={handle} />
       <section className="sec">
         <h2 className="sec-title">개발자 모드</h2>
         <p className="lead">DM이 어떻게 분류되는지 확인하는 도구를 켜요.</p>
@@ -720,7 +681,129 @@ function Settings({
           </>
         )}
       </section>
+      {onLogout && (
+        <section className="sec">
+          <button className="btn ghost" onClick={onLogout}>
+            로그아웃
+          </button>
+        </section>
+      )}
     </>
+  );
+}
+
+function Reply({ onSend }: { onSend: (text: string) => Promise<string | null> }) {
+  const [text, setText] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const send = async () => {
+    setBusy(true);
+    setErr("");
+    const error = await onSend(text.trim());
+    setBusy(false);
+    if (error) return setErr(error);
+    setText("");
+  };
+
+  return (
+    <div style={{ marginTop: 28 }}>
+      <h2 className="sec-title">답장</h2>
+      <textarea
+        className="textarea"
+        rows={3}
+        maxLength={1000}
+        aria-label="보낼 메시지"
+        placeholder="답장 내용을 입력해 주세요"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        style={{ marginTop: 12, minHeight: 96 }}
+      />
+      <p className="caption" style={{ marginTop: 8 }}>
+        보낸 답장은 인스타 DM으로 전송돼요.
+      </p>
+      {err && (
+        <p className="note warn" role="alert" style={{ marginTop: 12 }}>
+          {err}
+        </p>
+      )}
+      <button className="btn" style={{ marginTop: 12 }} disabled={busy || !text.trim()} onClick={send}>
+        {busy ? "보내는 중" : "보내기"}
+      </button>
+    </div>
+  );
+}
+
+function Login({ onDone }: { onDone: () => void }) {
+  const [signup, setSignup] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  // 가입은 서버가 계정을 만든 뒤(/api/signup) 같은 이메일과 비밀번호로 바로 로그인한다.
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setErr("");
+    if (signup) {
+      const res = await fetch("/api/signup", { method: "POST", body: JSON.stringify({ email, password }) });
+      if (!res.ok) {
+        setBusy(false);
+        return setErr(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "가입하지 못했어요.");
+      }
+    }
+    const { error } = await createClient().auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+    setBusy(false);
+    if (error) return setErr("이메일이나 비밀번호가 맞지 않아요.");
+    onDone();
+  };
+
+  return (
+    <section className="sec">
+      <h1 className="page-title">{signup ? "회원가입" : "로그인"}</h1>
+      <p className="lead">{signup ? "이메일과 비밀번호만 있으면 바로 시작해요." : "로그인하면 연결된 인스타 계정의 DM이 보여요."}</p>
+      <form onSubmit={submit}>
+        <div className="field">
+          <label className="label" htmlFor="login-email">
+            이메일
+          </label>
+          <input id="login-email" className="input" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        </div>
+        <div className="field">
+          <label className="label" htmlFor="login-password">
+            비밀번호
+          </label>
+          <input
+            id="login-password"
+            className="input"
+            type="password"
+            autoComplete={signup ? "new-password" : "current-password"}
+            placeholder={signup ? "8자 이상" : undefined}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </div>
+        {err && (
+          <p className="note warn" role="alert" style={{ marginTop: 16 }}>
+            {err}
+          </p>
+        )}
+        <button className="btn" style={{ marginTop: 20 }} disabled={busy || !email.trim() || password.length < (signup ? 8 : 1)}>
+          {busy ? (signup ? "가입하는 중" : "로그인 중") : signup ? "가입하기" : "로그인"}
+        </button>
+      </form>
+      <button
+        className="link-btn"
+        style={{ marginTop: 16 }}
+        onClick={() => {
+          setSignup(!signup);
+          setErr("");
+        }}
+      >
+        {signup ? "이미 계정이 있어요. 로그인하기" : "처음이에요. 회원가입하기"}
+      </button>
+    </section>
   );
 }
 
@@ -729,11 +812,13 @@ function Connect({
   linking,
   onLink,
   onUnlink,
+  handle,
 }: {
   connected: boolean;
   linking: boolean;
   onLink: () => void;
   onUnlink: () => void;
+  handle?: string;
 }) {
   return (
     <section className="sec">
@@ -743,7 +828,7 @@ function Connect({
         지금은 목업 화면이에요. 실제 연동은 Meta 앱 심사를 통과한 뒤 열려요.
       </div>
       <div className="link-box">
-        <code>{connected ? `@${ME.handle} 연결됨` : "연결된 계정이 없어요"}</code>
+        <code>{connected && handle ? `@${handle} 연결됨` : "연결된 계정이 없어요"}</code>
         {connected && <span className="badge ok">사용 중</span>}
       </div>
       <div className="pt" style={{ marginTop: 12 }}>
