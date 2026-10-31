@@ -1,7 +1,7 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { type ClassifyResponse, type ClassifyUsage, type GroupId, GROUPS, type Msg } from "@/lib/inbox";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { type GroupId, GROUPS, type Msg } from "@/lib/inbox";
 import { RangeCalendar } from "./RangeCalendar";
 import { createClient } from "@/lib/supabase/client";
 import { IconBack, IconCheck, IconEmpty, IconSettings, IconShield } from "./icons";
@@ -60,35 +60,6 @@ const rangeLabel = (r: Range) =>
   r.preset === "custom" ? `${short(r.from) || "처음"} ~ ${short(r.to) || "오늘"}` : PRESETS[r.preset];
 
 
-// 개발자 모드: 분류 근거, 사용량 안내, DM 직접 분류 도구를 보여 준다. 저장이 막힌 브라우저에서도 이번 방문 동안은 동작한다.
-const DEV_KEY = "pitchpouch_dev";
-const DEV_EVENT = "pitchpouch-dev";
-let devMemory: boolean | null = null;
-function readDev() {
-  if (devMemory !== null) return devMemory;
-  try {
-    return localStorage.getItem(DEV_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-function setDev(on: boolean) {
-  devMemory = on;
-  try {
-    localStorage.setItem(DEV_KEY, on ? "1" : "0");
-  } catch {}
-  window.dispatchEvent(new Event(DEV_EVENT));
-}
-function subscribeDev(cb: () => void) {
-  window.addEventListener(DEV_EVENT, cb);
-  window.addEventListener("storage", cb);
-  return () => {
-    window.removeEventListener(DEV_EVENT, cb);
-    window.removeEventListener("storage", cb);
-  };
-}
-const useDev = () => useSyncExternalStore(subscribeDev, readDev, () => false);
-
 const groupClass = (id: GroupId) => `c-${GROUPS.find((g) => g.id === id)?.tone || "none"}`;
 
 // 급한 순은 같은 급함 안에서 최신순, 최신순은 받은 시각만 본다
@@ -114,8 +85,6 @@ export function InboxApp() {
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
   const [sheet, setSheet] = useState(false);
   const [panel, setPanel] = useState<"range" | "sort" | null>(null);
-  const [settingsView, setSettingsView] = useState<"main" | "paste">("main");
-  const dev = useDev();
   const [sort, setSort] = useState<Sort>("urgent");
   const [status, setStatus] = useState<Status>("all");
   const [range, setRange] = useState<Range>({ preset: "all", from: "", to: "" });
@@ -125,8 +94,6 @@ export function InboxApp() {
   const [connected, setConnected] = useState(true);
   const [linking, setLinking] = useState(false);
   const [toast, setToast] = useState("");
-  const [extra, setExtra] = useState<Msg[]>([]);
-  const [usage, setUsage] = useState<ClassifyUsage | null>(null);
 
   const [live, setLive] = useState<Msg[]>([]);
   const [authed, setAuthed] = useState<boolean | null>(null); // null: 아직 모름
@@ -166,12 +133,12 @@ export function InboxApp() {
   const now = useNow();
   const msgs = useMemo<Msg[]>(
     () =>
-      [...live, ...extra].map((m) => ({
+      live.map((m) => ({
         ...m,
         group: overrides[m.id] ?? m.group,
         read: m.read || readSet.has(m.id),
       })),
-    [live, extra, overrides, readSet],
+    [live, overrides, readSet],
   );
   const open = msgs.find((m) => m.id === openId) ?? null;
 
@@ -179,7 +146,6 @@ export function InboxApp() {
     setOpenId(null);
     setSheet(false);
     setPanel(null);
-    setSettingsView("main");
     setTab("inbox");
   }, []);
   useEffect(() => {
@@ -196,7 +162,6 @@ export function InboxApp() {
     setOpenId(null);
     setSheet(false);
     setPanel(null);
-    setSettingsView("main");
     setTab("settings");
     if (!history.state?.pp) history.pushState({ pp: 1 }, "");
     window.scrollTo({ top: 0 });
@@ -215,14 +180,6 @@ export function InboxApp() {
     setOpenId(id);
     if (!history.state?.pp) history.pushState({ pp: 1 }, "");
     window.scrollTo({ top: 0 });
-  };
-  const addPasted = (added: Msg[], u: ClassifyUsage) => {
-    setExtra([...added, ...extra]);
-    setUsage(u);
-    setSettingsView("main");
-    setTab("inbox");
-    setFilter("all");
-    showToast(`${added.length}개를 분류했어요`);
   };
   const link = () => {
     setLinking(true);
@@ -250,7 +207,7 @@ export function InboxApp() {
               {!m.read && <i className="udot" aria-label="안 읽음" />}
               {m.name}
             </b>
-            <small>{hidden ? "스팸으로 분류돼 가려 뒀어요" : m.text}</small>
+            {!hidden && <small>{m.text}</small>}
             <Pills m={m} />
           </span>
           <span className="caption">{ago(m.minutesAgo, now)}</span>
@@ -290,7 +247,6 @@ export function InboxApp() {
           shown={open.group !== "junk" || revealed.has(open.id)}
           onReveal={() => setRevealed(new Set([...revealed, open.id]))}
           now={now}
-          dev={dev}
           onBack={() => history.back()}
           onChange={() => setSheet(true)}
           onSend={open.senderId ? (text) => sendReply(open, text) : undefined}
@@ -321,44 +277,24 @@ export function InboxApp() {
           ) : (
             <h1 className="page-title">보관함</h1>
           )}
-          {dev && usage && (
-            <div className="note" style={{ marginTop: 14 }}>
-              방금 Jev {usage.jev}개 · {usage.model.replace("claude-", "")} {usage.ai}개 · 규칙 {usage.rules}개 (Jev 신뢰도 {Math.round(usage.threshold * 100)}% 이상만 Jev 판정)
-              {usage.jevInputTokens > 0 && ` · Jev 입력 ${usage.jevInputTokens.toLocaleString()}토큰(약 $${usage.jevCostUsd.toFixed(5)})`}
-              {usage.ai > 0 && ` · Claude 입력 ${usage.inputTokens.toLocaleString()}, 출력 ${usage.outputTokens.toLocaleString()}토큰`}
-              {usage.costUsd !== null && usage.ai > 0 && ` · 약 $${usage.costUsd.toFixed(5)}`}
-            </div>
-          )}
-
           <div className="toolbar">
-            <select className="select" aria-label="분류" value={filter} onChange={(e) => setFilter(e.target.value as Filter)}>
-              {filters.map(([id, label, n]) => (
-                <option key={id} value={id}>
-                  {label} {n}
-                </option>
-              ))}
-            </select>
-            <select className="select" aria-label="읽음 상태" value={status} onChange={(e) => setStatus(e.target.value as Status)}>
-              {statuses.map(([k, label]) => (
-                <option key={k} value={k}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="title-row" style={{ marginTop: 10 }}>
+            <Menu label="분류" value={filter} options={filters.map(([id, label, n]) => [id, `${label} ${n}`])} onChange={setFilter} />
+            <Menu label="읽음 상태" value={status} options={statuses} onChange={setStatus} />
+            <span style={{ flex: 1 }} />
             <button
-              className="sort-btn"
+              className="menu-btn"
+              aria-label="기간"
               onClick={() => {
                 setDraft(range.preset === "custom" ? { from: range.from, to: range.to } : { from: "", to: "" });
                 setPanel("range");
               }}
             >
-              기간 · {rangeLabel(range)} ▾
+              {rangeLabel(range)}
+              <Chevron />
             </button>
-            <button className="sort-btn" onClick={() => setPanel("sort")}>
-              {SORTS[sort]} ▾
+            <button className="menu-btn" aria-label="정렬" onClick={() => setPanel("sort")}>
+              {SORTS[sort]}
+              <Chevron />
             </button>
           </div>
 
@@ -371,9 +307,7 @@ export function InboxApp() {
                 <div className="title-row">
                   <p className="group-title">
                     {g.label}
-                    <span>
-                      {list.length} · {g.hint}
-                    </span>
+                    <span>{list.length}</span>
                   </p>
                   {filter === "all" && g.id === "junk" && (
                     <button className="link-btn" style={{ marginTop: 18 }} onClick={() => setJunkOpen(!junkOpen)}>
@@ -402,24 +336,12 @@ export function InboxApp() {
             );
           })}
         </section>
-      ) : settingsView === "paste" ? (
-        <>
-          <section className="sec" style={{ paddingBottom: 0 }}>
-            <button className="link-btn" onClick={() => setSettingsView("main")} style={{ display: "flex", alignItems: "center", gap: 2, marginLeft: -6 }}>
-              <IconBack size={18} /> 설정
-            </button>
-          </section>
-          <Paste onDone={addPasted} />
-        </>
       ) : (
         <Settings
           connected={connected}
           linking={linking}
           onLink={link}
           onUnlink={() => setConnected(false)}
-          dev={dev}
-          onDev={setDev}
-          onPaste={() => setSettingsView("paste")}
           onBack={() => history.back()}
           onLogout={authed ? logout : undefined}
           handle={profile?.handle}
@@ -490,7 +412,7 @@ export function InboxApp() {
         </div>
         {panel === "range" && <RangeCalendar today={today} from={draft.from} to={draft.to} onChange={(from, to) => setDraft({ from, to })} />}
         <p className="caption" style={{ marginTop: 10, minHeight: 18 }}>
-          {draft.from ? `${short(draft.from)}${draft.to ? ` ~ ${short(draft.to)}` : " 하루"}` : "시작일과 종료일을 차례로 눌러 주세요"}
+          {draft.from ? `${short(draft.from)}${draft.to ? ` ~ ${short(draft.to)}` : " 하루"}` : ""}
         </p>
         <button
           className="btn"
@@ -517,7 +439,6 @@ function Detail({
   shown,
   onReveal,
   now,
-  dev,
   onBack,
   onChange,
   onSend,
@@ -526,7 +447,6 @@ function Detail({
   shown: boolean;
   onReveal: () => void;
   now: number;
-  dev: boolean;
   onBack: () => void;
   onChange: () => void;
   onSend?: (text: string) => Promise<string | null>;
@@ -547,39 +467,17 @@ function Detail({
           </button>
         </div>
         <p className="caption">
-          {m.pasted ? "붙여넣은 DM" : `@${m.handle}`} · {ago(m.minutesAgo, now)}
+          @{m.handle} · {ago(m.minutesAgo, now)}
           {m.minutesAgo >= 1440 && ` · ${new Date(now - m.minutesAgo * 60_000).toLocaleString("ko-KR", { month: "long", day: "numeric", hour: "numeric", minute: "2-digit" })}`}
         </p>
         {shown ? (
           <div className="reply">{m.text}</div>
         ) : (
           <div className="reply">
-            스팸으로 분류돼 가려 뒀어요.
-            <button className="btn ghost sm" style={{ marginTop: 10, display: "flex" }} onClick={onReveal}>
+            <button className="btn ghost sm" style={{ display: "flex" }} onClick={onReveal}>
               내용 보기
             </button>
           </div>
-        )}
-        {dev && (
-          <details className="dev">
-            <summary>분류 근거 보기</summary>
-            <p>{m.reason}</p>
-            {m.source && (
-              <p>{m.source === "jev" ? "Jev가 분류했어요" : m.source === "ai" ? "Claude가 분류했어요" : "AI를 쓰지 못해 키워드 규칙으로 분류했어요"}</p>
-            )}
-            {m.jev && (
-              <p>
-                Jev 판정: {m.jev.group === "unclear" ? "애매함" : GROUPS.find((x) => x.id === m.jev!.group)?.label} · 신뢰도 {Math.round(m.jev.confidence * 100)}%
-                {m.jev.accepted
-                  ? " (기준 이상, Jev 판정 사용)"
-                  : m.jev.why === "unclear"
-                    ? " (애매함으로 판정, Claude가 다시 분류)"
-                    : m.jev.why === "risk" || m.jev.why === "veto"
-                      ? " (사기 신호 감지, Claude가 다시 분류)"
-                      : " (기준 미만, Claude가 다시 분류)"}
-              </p>
-            )}
-          </details>
         )}
         {onSend && <Reply key={m.id} onSend={onSend} />}
       </section>
@@ -592,9 +490,6 @@ function Settings({
   linking,
   onLink,
   onUnlink,
-  dev,
-  onDev,
-  onPaste,
   onBack,
   onLogout,
   handle,
@@ -603,9 +498,6 @@ function Settings({
   linking: boolean;
   onLink: () => void;
   onUnlink: () => void;
-  dev: boolean;
-  onDev: (on: boolean) => void;
-  onPaste: () => void;
   onBack: () => void;
   onLogout?: () => void;
   handle?: string;
@@ -619,27 +511,6 @@ function Settings({
         <h1 className="page-title" style={{ marginTop: 8 }}>설정</h1>
       </section>
       <Connect connected={connected} linking={linking} onLink={onLink} onUnlink={onUnlink} handle={handle} />
-      <section className="sec">
-        <h2 className="sec-title">개발자 모드</h2>
-        <p className="lead">DM이 어떻게 분류되는지 확인하는 도구를 켜요.</p>
-        <div className="group-row">
-          <button className={`switch ${dev ? "on" : ""}`} onClick={() => onDev(!dev)} aria-label="개발자 모드">
-            <i />
-          </button>
-          {dev ? "켜짐" : "꺼짐"}
-        </div>
-        {dev && (
-          <>
-            <button className="btn ghost" style={{ marginTop: 16 }} onClick={onPaste}>
-              DM 직접 분류해 보기
-            </button>
-            <div className="pt" style={{ marginTop: 12 }}>
-              <b>켜면 달라지는 것</b>
-              <p>DM 상세 화면에 분류 근거(Jev 판정, 신뢰도, 판정 경로)가 보이고, 직접 분류한 뒤에는 사용량과 비용 안내가 떠요.</p>
-            </div>
-          </>
-        )}
-      </section>
       {onLogout && (
         <section className="sec">
           <button className="btn ghost" onClick={onLogout}>
@@ -648,6 +519,59 @@ function Settings({
         </section>
       )}
     </>
+  );
+}
+
+const Chevron = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="m6 9 6 6 6-6" />
+  </svg>
+);
+
+// 브라우저 기본 select 대신 앱 스타일로 그린 작은 선택 메뉴. 바깥을 누르거나 Esc로 닫힌다.
+function Menu<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: [T, string][]; onChange: (v: T) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
+
+  return (
+    <div className="menu" ref={ref}>
+      <button className="menu-btn" aria-label={label} aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen(!open)}>
+        {options.find(([k]) => k === value)?.[1]}
+        <Chevron />
+      </button>
+      {open && (
+        <ul className="menu-list" role="listbox" aria-label={label}>
+          {options.map(([k, text]) => (
+            <li key={k}>
+              <button
+                role="option"
+                aria-selected={k === value}
+                className={k === value ? "on" : ""}
+                onClick={() => {
+                  onChange(k);
+                  setOpen(false);
+                }}
+              >
+                {text}
+                {k === value && <IconCheck size={16} />}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -673,14 +597,10 @@ function Reply({ onSend }: { onSend: (text: string) => Promise<string | null> })
         rows={3}
         maxLength={1000}
         aria-label="보낼 메시지"
-        placeholder="답장 내용을 입력해 주세요"
         value={text}
         onChange={(e) => setText(e.target.value)}
         style={{ marginTop: 12, minHeight: 96 }}
       />
-      <p className="caption" style={{ marginTop: 8 }}>
-        보낸 답장은 인스타 DM으로 전송돼요.
-      </p>
       {err && (
         <p className="note warn" role="alert" style={{ marginTop: 12 }}>
           {err}
@@ -721,7 +641,6 @@ function Login({ onDone }: { onDone: () => void }) {
   return (
     <section className="sec">
       <h1 className="page-title">{signup ? "회원가입" : "로그인"}</h1>
-      <p className="lead">{signup ? "이메일과 비밀번호만 있으면 바로 시작해요." : "로그인하면 연결된 인스타 계정의 DM이 보여요."}</p>
       <form onSubmit={submit}>
         <div className="field">
           <label className="label" htmlFor="login-email">
@@ -760,7 +679,7 @@ function Login({ onDone }: { onDone: () => void }) {
           setErr("");
         }}
       >
-        {signup ? "이미 계정이 있어요. 로그인하기" : "처음이에요. 회원가입하기"}
+        {signup ? "로그인" : "회원가입"}
       </button>
     </section>
   );
@@ -782,25 +701,9 @@ function Connect({
   return (
     <section className="sec">
       <h2 className="sec-title">인스타 연결</h2>
-      <p className="lead">Meta 계정을 연결하면 DM이 자동으로 들어와 분류돼요.</p>
-      <div className="note warn" style={{ marginTop: 14 }}>
-        지금은 목업 화면이에요. 실제 연동은 Meta 앱 심사를 통과한 뒤 열려요.
-      </div>
       <div className="link-box">
         <code>{connected && handle ? `@${handle} 연결됨` : "연결된 계정이 없어요"}</code>
         {connected && <span className="badge ok">사용 중</span>}
-      </div>
-      <div className="pt" style={{ marginTop: 12 }}>
-        <b>DM 읽기</b>
-        <p>받은 메시지를 읽어 분류하고 답장 필요 여부, 급한 정도, 조건을 뽑아요.</p>
-      </div>
-      <div className="pt">
-        <b>답장은 직접</b>
-        <p>자동으로 답장하지 않아요. 채팅방으로 이동해서 직접 보내요.</p>
-      </div>
-      <div className="pt">
-        <b>가려서 보기</b>
-        <p>악성 메시지는 기본으로 가려 둬요. 보고 싶을 때만 열어요.</p>
       </div>
       <div style={{ marginTop: 20 }}>
         {connected ? (
@@ -814,97 +717,6 @@ function Connect({
         )}
       </div>
     </section>
-  );
-}
-
-const SAMPLE = [
-  "안녕하세요 에이블랩입니다! 신제품 토너 릴스 1건에 광고비 80만원 제안드려요. 11/18까지 회신 부탁드립니다.",
-  "언니 영상 보고 루틴 따라 했는데 피부결이 달라졌어요 ㅠㅠ 응원해요!",
-  "[당첨 안내] 협찬 이벤트 당첨! 배송비 3,900원만 먼저 결제해 주시면 정품을 보내드려요 bit.ly/abcd",
-  "어제 공구로 주문한 세트 아직 배송이 안 왔어요. 언제 받을 수 있나요?",
-].join("\n\n");
-
-function Paste({ onDone }: { onDone: (added: Msg[], usage: ClassifyUsage) => void }) {
-  const [text, setText] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-  const items = text.split(/\n\s*\n/).map((t) => t.trim()).filter(Boolean);
-
-  const submit = async () => {
-    setBusy(true);
-    setErr("");
-    try {
-      const stamp = Date.now();
-      const res = await fetch("/api/classify", {
-        method: "POST",
-        body: JSON.stringify({ messages: items.map((t, i) => ({ id: `p${stamp}-${i}`, text: t })) }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error ?? "분류하지 못했어요");
-      const data = (await res.json()) as ClassifyResponse;
-      onDone(
-        data.results.map((r, i) => ({
-          id: r.id,
-          name: `붙여넣은 DM ${i + 1}`,
-          handle: "",
-          minutesAgo: 0,
-          read: false,
-          done: false,
-          text: items[i],
-          group: r.group,
-          reply: r.reply,
-          urgency: r.urgency,
-          terms: r.terms,
-          termsNote: r.termsNote || undefined,
-          reason: r.reason,
-          pasted: true,
-          source: r.source,
-          jev: r.jev,
-        })),
-        data.usage,
-      );
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "분류하지 못했어요");
-    }
-    setBusy(false);
-  };
-
-  if (busy)
-    return (
-      <section className="sec">
-        <div className="loading">
-          <div className="bar">
-            <i />
-          </div>
-          DM을 하나씩 읽고 있어요
-        </div>
-      </section>
-    );
-
-  return (
-    <>
-      <section className="sec">
-        <h1 className="page-title">DM 붙여넣기</h1>
-        <p className="lead">DM 사이에 빈 줄을 하나 넣어 주세요. 한 번에 20개까지 분류해요.</p>
-        <div className="field">
-          <textarea
-            className="textarea"
-            placeholder={"받은 DM을 붙여넣어 주세요.\n\n빈 줄로 DM을 나눠요."}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-          />
-        </div>
-        <button className="link-btn" style={{ marginTop: 6 }} onClick={() => setText(SAMPLE)}>
-          샘플 DM 4개 넣기
-        </button>
-        {items.length > 0 && <p className="caption">DM {items.length}개로 읽었어요</p>}
-        {err && <p className="err">{err}</p>}
-      </section>
-      <div className="cta">
-        <button className="btn" disabled={items.length === 0 || items.length > 20} onClick={submit}>
-          분류하기
-        </button>
-      </div>
-    </>
   );
 }
 

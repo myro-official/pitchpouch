@@ -5,7 +5,7 @@ export type Group = { id: GroupId; label: string; hint: string; tone: "new" | "o
 // 화면의 보관함 탭이 그대로 나오도록 "크리에이터가 다음에 할 행동"으로 묶는다.
 export const GROUPS: Group[] = [
   {
-    id: "gain", label: "수익 기회", hint: "조건을 보고 답할 제안", tone: "new",
+    id: "gain", label: "비즈니스", hint: "조건을 보고 답할 제안", tone: "new",
     desc: "돈이나 제품이 오가는 제안. 협찬, 유료 광고, 공동구매, 행사·섭외, 소속 영입처럼 크리에이터가 조건을 보고 수락 여부를 정하는 것",
   },
   {

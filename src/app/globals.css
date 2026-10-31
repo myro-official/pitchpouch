@@ -48,7 +48,7 @@ p { text-wrap: pretty; }
 .link-btn { border: 0; background: none; color: var(--muted); font-size: 13px; font-weight: 600; padding: 6px 4px; }
 
 .sec { padding: 24px 20px; }
-.sec + .sec { border-top: 12px solid var(--band); }
+.sec + .sec { border-top: 1px solid var(--line); }
 .page-title { font-size: 24px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.35; }
 .sec-title { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.4; }
 .lead { color: var(--sub); margin-top: 6px; }
@@ -201,12 +201,27 @@ p { text-wrap: pretty; }
 /* PRO 표시, 정렬·필터, 알림함 */
 .pro { font-size: 10px; font-weight: 800; letter-spacing: .04em; background: var(--ink); color: #fff; border-radius: 6px; padding: 2px 6px; margin-left: 2px; }
 .filters { margin-top: 16px; }
-/* 보관함 위 분류·읽음 상태 드롭다운 */
-.toolbar { display: flex; gap: 8px; margin-top: 16px; }
-.toolbar .select {
-  width: auto; padding: 9px 34px 9px 12px; border-radius: 10px; font-size: 14px; font-weight: 700; color: var(--ink); cursor: pointer;
-  background: var(--fill) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234e5968' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center / 16px;
+/* 보관함 위 분류·읽음 상태·기간·정렬 버튼 */
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; }
+.menu { position: relative; }
+.menu-btn {
+  display: inline-flex; align-items: center; gap: 4px; border: 0; background: var(--fill); color: var(--ink);
+  font-size: 14px; font-weight: 700; padding: 8px 10px 8px 12px; border-radius: 10px; white-space: nowrap; transition: background .15s;
 }
+.menu-btn:active { background: var(--line); }
+.menu-btn svg { width: 16px; height: 16px; fill: none; stroke: var(--sub); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s; }
+.menu-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+.menu-list {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; min-width: 168px; list-style: none; padding: 6px;
+  background: var(--surface); border-radius: 12px; box-shadow: 0 10px 28px rgba(0, 0, 0, .12), 0 0 0 1px var(--line);
+}
+.menu-list button {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 0; background: none;
+  text-align: left; font-size: 15px; font-weight: 500; color: var(--ink); padding: 10px 9px 10px 12px; border-radius: 8px;
+}
+.menu-list button:hover { background: var(--fill); }
+.menu-list button.on { color: var(--brand-ink); font-weight: 700; }
+.menu-list svg { width: 16px; height: 16px; flex: none; }
 .seg .thumb { width: calc((100% - 8px - (var(--n, 3) - 1) * 4px) / var(--n, 3)); }
 .seg button { font-size: 13px; }
 .item .tx small.clash { color: var(--warn-ink); font-weight: 700; }

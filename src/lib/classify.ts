@@ -25,7 +25,7 @@ export const JEV_USD_PER_M_INPUT = 0.042;
 const GROUP_IDS = GROUPS.map((g) => g.id) as [GroupId, ...GroupId[]];
 const label = (id: GroupId) => GROUPS.find((g) => g.id === id)!.label;
 // 화면 이름이 바뀌어도 프롬프트는 평가해 둔 문구를 그대로 쓴다.
-const PROMPT_LABEL: Partial<Record<GroupId, string>> = { junk: "걸러낼 것" };
+const PROMPT_LABEL: Partial<Record<GroupId, string>> = { gain: "수익 기회", junk: "걸러낼 것" };
 
 // 공개 주소라 누가 눌러도 키 비용이 무한히 나가지 않도록 서버 한 대당 시간당 호출 수를 제한한다. 넘으면 다음 단계로 넘어간다.
 // 1,000회면 Jev와 Claude를 전부 불러도 시간당 $0.2 안쪽이다.
