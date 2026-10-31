@@ -228,9 +228,9 @@ p { text-wrap: pretty; }
 .menu-list button:hover { background: var(--fill); }
 .menu-list button.on { color: var(--brand-ink); font-weight: 700; }
 .menu-list svg { width: 16px; height: 16px; flex: none; }
-/* 아이콘 버튼에서 여는 목록: 버튼 오른쪽 끝에 맞추고 글자 길이만큼 넓힌다 */
-.menu-list.pop { left: auto; right: 0; min-width: 140px; }
-.menu-list.pop button { padding: 10px 10px 10px 12px; gap: 12px; }
+/* 아이콘 버튼에서 여는 목록: 버튼 오른쪽 끝에 맞추고 글자 길이만큼만 넓다 */
+.menu-list.pop { left: auto; right: 0; }
+.menu-list.pop button { padding: 10px 10px 10px 12px; gap: 20px; }
 .seg .thumb { width: calc((100% - 8px - (var(--n, 3) - 1) * 4px) / var(--n, 3)); }
 .seg button { font-size: 13px; }
 .item .tx small.clash { color: var(--warn-ink); font-weight: 700; }
@@ -311,10 +311,12 @@ p { text-wrap: pretty; }
 .bsheet-scrim { position: absolute; inset: 0; background: rgba(25,31,40,.38); opacity: 0; transition: opacity .3s; }
 .bsheet.open .bsheet-scrim { opacity: 1; }
 /* 바텀시트 대신 화면 가운데에 뜨는 창 */
-.bsheet-panel { position: absolute; left: 50%; top: 50%; width: calc(100% - 32px); max-width: 400px; background: var(--surface); border-radius: 16px; padding: 18px 20px 20px; transform: translate(-50%, -47%) scale(.98); opacity: 0; transition: transform .2s ease, opacity .2s ease; max-height: calc(100dvh - 48px); overflow-y: auto; box-shadow: 0 20px 60px rgba(0, 0, 0, .18); }
+.bsheet-panel { position: absolute; left: 50%; top: 50%; width: calc(100% - 32px); max-width: 400px; background: var(--surface); border-radius: 16px; padding: 24px; transform: translate(-50%, -47%) scale(.98); opacity: 0; transition: transform .2s ease, opacity .2s ease; max-height: calc(100dvh - 48px); overflow-y: auto; box-shadow: 0 20px 60px rgba(0, 0, 0, .18); }
 .bsheet.open .bsheet-panel { transform: translate(-50%, -50%); opacity: 1; }
 .bsheet-grab { width: 40px; height: 4px; border-radius: 99px; background: var(--line); margin: 0 auto 12px; }
 .bsheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+/* 닫기 글자 끝을 아래 내용 오른쪽 끝에 맞춘다 */
+.bsheet-head .link-btn { margin-right: -4px; }
 .sheet-list { display: flex; flex-direction: column; }
 .sheet-opt { display: flex; align-items: center; justify-content: space-between; border: 0; background: none; padding: 14px 4px; font-size: 16px; font-weight: 600; text-align: left; color: var(--ink); }
 .sheet-opt + .sheet-opt { border-top: 1px solid var(--line); }
@@ -358,8 +360,6 @@ p { text-wrap: pretty; }
 .icon-btn.on { background: var(--brand-weak); color: var(--brand-ink); }
 
 /* 기간 달력 */
-/* 기간 창: 위 버튼 줄, 달력, 아래 선택 버튼을 같은 폭으로 가운데에 모은다 */
-.cal-wrap { max-width: 340px; margin: 0 auto; }
 /* 누를 때 브라우저가 칠하는 파란 강조(탭 하이라이트, 글자 선택, 포커스 테두리)를 끈다. 키보드 이동 때만 네이비 테두리 */
 .cal-wrap button { -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
 .cal-wrap button:focus { outline: none; }

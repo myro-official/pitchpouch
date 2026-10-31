@@ -162,14 +162,15 @@ export function InboxApp() {
     if (!history.state?.pp) history.pushState({ pp: 1 }, "");
     window.scrollTo({ top: 0 });
   };
-  // 실패하면 화면에 띄울 문구를, 성공하면 null을 돌려준다.
+  // 결과는 토스트로 알리고 보냈는지만 돌려준다. 못 보내면 입력한 글을 남긴다.
   const sendReply = async (m: Msg, text: string) => {
-    const res = await fetch(`/api/dms/${encodeURIComponent(m.id)}/reply`, { method: "POST", body: JSON.stringify({ text }) });
-    if (res.ok) {
-      showToast("메시지를 보냈어요");
-      return null;
+    if (!m.senderId) {
+      showToast("시연용 DM이라 보낼 수 없어요");
+      return false;
     }
-    return ((await res.json().catch(() => ({}))) as { error?: string }).error ?? "보내지 못했어요.";
+    const res = await fetch(`/api/dms/${encodeURIComponent(m.id)}/reply`, { method: "POST", body: JSON.stringify({ text }) });
+    showToast(res.ok ? "메시지를 보냈어요" : (((await res.json().catch(() => ({}))) as { error?: string }).error ?? "보내지 못했어요."));
+    return res.ok;
   };
   const openMsg = (id: string) => {
     setReadSet((r) => new Set(r).add(id));
@@ -225,7 +226,7 @@ export function InboxApp() {
           PitchPouch
         </button>
         {tab === "settings" && !open ? (
-          <button className="link-btn" style={{ display: "flex", alignItems: "center", gap: 2, fontSize: 15 }} onClick={() => history.back()}>
+          <button className="link-btn" style={{ display: "flex", alignItems: "center", gap: 2, fontSize: 15, height: 40 }} onClick={() => history.back()}>
             <IconBack size={18} /> 보관함
           </button>
         ) : (
@@ -243,10 +244,10 @@ export function InboxApp() {
           now={now}
           onBack={() => history.back()}
           onChange={() => setSheet(true)}
-          onSend={(text) => (open.senderId ? sendReply(open, text) : Promise.resolve("시연용 DM이라 보낼 수 없어요"))}
+          onSend={(text) => sendReply(open, text)}
         />
       ) : tab === "inbox" && authed === false ? (
-        <Login onDone={loadLive} />
+        <Login onDone={loadLive} onError={showToast} />
       ) : tab === "inbox" ? (
         <section className="sec">
           {profile ? (
@@ -395,7 +396,11 @@ export function InboxApp() {
         </div>
       </Sheet>
 
-      {toast && <div className="toast">{toast}</div>}
+      {toast && (
+        <div className="toast" role="status">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
@@ -415,7 +420,7 @@ function Detail({
   now: number;
   onBack: () => void;
   onChange: () => void;
-  onSend?: (text: string) => Promise<string | null>;
+  onSend?: (text: string) => Promise<boolean>;
 }) {
   const g = GROUPS.find((x) => x.id === m.group)!;
   return (
@@ -548,18 +553,15 @@ function Menu<T extends string>({
   );
 }
 
-function Reply({ onSend }: { onSend: (text: string) => Promise<string | null> }) {
+function Reply({ onSend }: { onSend: (text: string) => Promise<boolean> }) {
   const [text, setText] = useState("");
-  const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
   const send = async () => {
     setBusy(true);
-    setErr("");
-    const error = await onSend(text.trim());
+    const sent = await onSend(text.trim());
     setBusy(false);
-    if (error) return setErr(error);
-    setText("");
+    if (sent) setText("");
   };
 
   return (
@@ -574,11 +576,6 @@ function Reply({ onSend }: { onSend: (text: string) => Promise<string | null> })
         onChange={(e) => setText(e.target.value)}
         style={{ marginTop: 12, minHeight: 96 }}
       />
-      {err && (
-        <p className="note warn" role="alert" style={{ marginTop: 12 }}>
-          {err}
-        </p>
-      )}
       <button className="btn" style={{ marginTop: 12 }} disabled={busy || !text.trim()} onClick={send}>
         {busy ? "보내는 중" : "보내기"}
       </button>
@@ -586,28 +583,26 @@ function Reply({ onSend }: { onSend: (text: string) => Promise<string | null> })
   );
 }
 
-function Login({ onDone }: { onDone: () => void }) {
+function Login({ onDone, onError }: { onDone: () => void; onError: (msg: string) => void }) {
   const [signup, setSignup] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
   // 가입은 서버가 계정을 만든 뒤(/api/signup) 같은 이메일과 비밀번호로 바로 로그인한다.
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    setErr("");
     if (signup) {
       const res = await fetch("/api/signup", { method: "POST", body: JSON.stringify({ email, password }) });
       if (!res.ok) {
         setBusy(false);
-        return setErr(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "가입하지 못했어요.");
+        return onError(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "가입하지 못했어요.");
       }
     }
     const { error } = await createClient().auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
     setBusy(false);
-    if (error) return setErr("이메일이나 비밀번호가 맞지 않아요.");
+    if (error) return onError("이메일이나 비밀번호가 맞지 않아요.");
     onDone();
   };
 
@@ -635,11 +630,6 @@ function Login({ onDone }: { onDone: () => void }) {
             onChange={(e) => setPassword(e.target.value)}
           />
         </div>
-        {err && (
-          <p className="note warn" role="alert" style={{ marginTop: 16 }}>
-            {err}
-          </p>
-        )}
         <button className="btn" style={{ marginTop: 20 }} disabled={busy || !email.trim() || password.length < (signup ? 8 : 1)}>
           {busy ? (signup ? "가입하는 중" : "로그인 중") : signup ? "가입하기" : "로그인"}
         </button>
@@ -647,10 +637,7 @@ function Login({ onDone }: { onDone: () => void }) {
       <button
         className="link-btn"
         style={{ marginTop: 16 }}
-        onClick={() => {
-          setSignup(!signup);
-          setErr("");
-        }}
+        onClick={() => setSignup(!signup)}
       >
         {signup ? "로그인" : "회원가입"}
       </button>
