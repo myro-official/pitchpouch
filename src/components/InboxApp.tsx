@@ -229,8 +229,8 @@ export function InboxApp() {
           PitchPouch
         </button>
         {tab === "settings" && !open ? (
-          <button className="link-btn" style={{ fontSize: 15 }} onClick={() => history.back()}>
-            보관함
+          <button className="link-btn" style={{ display: "flex", alignItems: "center", gap: 2, fontSize: 15 }} onClick={() => history.back()}>
+            <IconBack size={18} /> 보관함
           </button>
         ) : (
           <button className="icon-btn" onClick={openSettings} aria-label="설정">
