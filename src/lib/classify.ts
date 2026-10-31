@@ -36,17 +36,18 @@ function takeBudget(kind: keyof typeof windows) {
 }
 
 // ---- 1차: Jev ---------------------------------------------------------------
-// 한 번의 호출에 대분류와 3가지 축을 함께 묻는다. 급한 정도를 분류에 섞으면 주제 판정이 흐려져서 질문을 따로 둔다.
+// 한 번의 호출에 대분류와 답장 필요, 급한 정도를 함께 묻는다. 급한 정도를 분류에 섞으면 주제 판정이 흐려져서 질문을 따로 둔다.
+// 금액·조건 여부는 Jev가 숫자 없는 DM에도 "있다"고 답해서(시연 17개 중 6개) 패턴 검사로 대신한다.
 const JEV_URL = process.env.JEV_URL ?? "https://api.typesafe.ai/v1/systemone";
 const JEV_MODEL = process.env.JEV_MODEL ?? "jev-latest";
 
 const JevAnswer = z.object({ choice: z.string(), confidence: z.number() });
 const JevResponse = z.object({
-  answers: z.object({ group: JevAnswer, reply: JevAnswer, urgency: JevAnswer, terms: JevAnswer }),
+  answers: z.object({ group: JevAnswer, reply: JevAnswer, urgency: JevAnswer }),
   usage: z.object({ input_tokens: z.number() }).optional(),
 });
 
-type JevOut = { group: GroupId; confidence: number; reply: boolean; urgency: Classified["urgency"]; terms: boolean; inputTokens: number };
+type JevOut = { group: GroupId; confidence: number; reply: boolean; urgency: Classified["urgency"]; inputTokens: number };
 
 async function askJev(text: string): Promise<JevOut> {
   const res = await fetch(JEV_URL, {
@@ -76,11 +77,6 @@ async function askJev(text: string): Promise<JevOut> {
             "3": "오늘 안에 답해야 한다. 임박한 마감이나 이미 지연된 일이 있다.",
           },
         },
-        terms: {
-          type: "choice",
-          instructions: "금액이나 조건(일정, 수수료, 건수, 기간)이 적혀 있는가?",
-          criteria: { yes: "숫자로 된 금액이나 조건이 적혀 있다.", no: "금액이나 조건이 없다." },
-        },
       },
     }),
     signal: AbortSignal.timeout(10_000),
@@ -94,7 +90,6 @@ async function askJev(text: string): Promise<JevOut> {
     confidence: answers.group.confidence,
     reply: answers.reply.choice === "yes",
     urgency,
-    terms: answers.terms.choice === "yes",
     inputTokens: usage?.input_tokens ?? 0,
   };
 }
@@ -149,8 +144,8 @@ export async function classifyDm(text: string): Promise<Outcome> {
             group: j.group,
             reply: j.reply,
             urgency: j.urgency,
-            terms: j.terms,
-            termsNote: foundTerms(text),
+            terms: j.group !== "junk" && foundTerms(text) !== "",
+            termsNote: j.group === "junk" ? "" : foundTerms(text),
             reason: `Jev 판정은 ${label(j.group)}이고 신뢰도는 ${Math.round(j.confidence * 100)}%예요.`,
             source: "jev",
             jev,
