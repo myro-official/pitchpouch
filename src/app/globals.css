@@ -197,3 +197,21 @@ p { text-wrap: pretty; }
 .paste-open .tx b { display: block; font-size: 15px; }
 .paste-open .tx small { display: block; font-size: 13px; color: var(--sub); }
 .fill-note { margin-top: 10px; font-size: 13px; font-weight: 600; color: var(--brand-ink); }
+.chips.sub { margin-top: 8px; padding-left: 10px; border-left: 2px solid var(--brand); }
+.input.date { min-height: 52px; cursor: pointer; }
+.input.date::-webkit-calendar-picker-indicator { cursor: pointer; opacity: .6; }
+
+/* PRO 표시, 정렬·필터, 알림함 */
+.pro { font-size: 10px; font-weight: 800; letter-spacing: .04em; background: var(--ink); color: #fff; border-radius: 6px; padding: 2px 6px; margin-left: 2px; }
+.filters { margin-top: 16px; }
+.seg .thumb { width: calc((100% - 8px - (var(--n, 3) - 1) * 4px) / var(--n, 3)); }
+.seg button { font-size: 13px; }
+.item .tx small.clash { color: var(--warn-ink); font-weight: 700; }
+.item.alert { align-items: flex-start; }
+.item.alert .tx small { white-space: normal; }
+.item.alert .caption { flex: 0 0 auto; padding-top: 2px; }
+.adot { flex: 0 0 8px; height: 8px; border-radius: 99px; margin-top: 8px; background: var(--line); }
+.item.alert.unseen .adot.new { background: var(--brand-ink); }
+.item.alert.unseen .adot.warn { background: var(--warn-ink); }
+.item.alert.unseen .adot.ok { background: var(--ok); }
+.item.alert.unseen .adot.bad { background: var(--danger); }

@@ -79,3 +79,9 @@ export const IconEmpty = ({ size = 56 }: P) => (
     <circle cx="40" cy="14" r="6" fill="#B02A62" />
   </svg>
 );
+export const IconBell = ({ size = 22 }: P) => (
+  <svg {...base(size)}>
+    <path d="M6 16V11a6 6 0 1112 0v5l1.5 2h-15L6 16z" />
+    <path d="M10 20.5a2 2 0 004 0" />
+  </svg>
+);

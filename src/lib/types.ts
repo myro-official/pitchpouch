@@ -63,6 +63,13 @@ export type CounterOffer = {
   at: string;
 };
 
+export type ProposalMeta = {
+  category: string | null; // "스킨케어 · 마스크팩"
+  uploadDate: string | null; // "2026-11-20"
+  minUse: string | null; // 업로드 전 최소 사용 기간 "2주"
+  exclusivity: string | null;
+};
+
 export type Proposal = {
   id: string;
   handle: string;
@@ -71,6 +78,7 @@ export type Proposal = {
   contact: string;
   rawText: string;
   analysis: Analysis | null;
+  meta: ProposalMeta;
   status: ProposalStatus;
   counter: CounterOffer | null;
   brandReply: string | null;
@@ -85,6 +93,9 @@ export type BrandForm = {
   deliverables: Deliverables;
   budgetWon: number | null;
   schedule: string;
+  category: string;
+  uploadDate: string;
+  minUse: string;
   usageRights: string;
   exclusivity: string;
   revisions: string;

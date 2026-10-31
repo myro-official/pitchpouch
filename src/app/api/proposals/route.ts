@@ -1,6 +1,8 @@
 import { analyzeProposal } from "@/lib/analyze";
+import { extractWithRules } from "@/lib/extract";
+import { dateLabel, emptyMeta } from "@/lib/meta";
 import { addProposal, getCreator, listProposals, normalizeHandle, saveCreator } from "@/lib/store";
-import type { BrandForm, Creator, Proposal } from "@/lib/types";
+import type { BrandForm, Creator, Proposal, ProposalMeta } from "@/lib/types";
 
 type Body =
   | { source: "paste"; creator: Creator; text: string }
@@ -19,11 +21,15 @@ export async function POST(request: Request) {
   let text: string;
   let brandName = "";
   let contact = "";
+  let meta: ProposalMeta = emptyMeta();
 
   if (body.source === "paste") {
     creator = saveCreator(body.creator);
     text = body.text?.trim() ?? "";
     if (text.length < 10) return Response.json({ error: "제안 내용을 조금 더 붙여넣어 주세요." }, { status: 400 });
+    const x = extractWithRules(text);
+    meta = { category: x.category, uploadDate: x.uploadDate, minUse: x.minUse, exclusivity: x.exclusivity };
+    brandName = x.brandName ?? "";
   } else {
     creator = getCreator(body.handle);
     if (!creator) return Response.json({ error: "없는 링크예요." }, { status: 404 });
@@ -34,9 +40,21 @@ export async function POST(request: Request) {
     brandName = f.brandName.trim();
     contact = f.contact?.trim() ?? "";
     text = formToText(f);
+    meta = {
+      category: f.category || null,
+      uploadDate: f.uploadDate || null,
+      minUse: f.minUse && f.minUse !== "없음" ? f.minUse : null,
+      exclusivity: f.exclusivity?.trim() || null,
+    };
   }
 
   const analysis = await analyzeProposal(text, creator);
+  if (analysis.engine === "rules" && body.source === "paste") {
+    const x = extractWithRules(text);
+    analysis.terms.brand = x.brandName ?? analysis.terms.brand;
+    analysis.terms.product = x.product ?? analysis.terms.product;
+    analysis.summary = `${analysis.terms.brand ?? "브랜드"}의 ${analysis.terms.product ?? "제품"} 협찬 제안${analysis.budgetWon === null ? " (원고료 미기재)" : ""}`;
+  }
   const now = new Date().toISOString();
   const proposal: Proposal = {
     id: crypto.randomUUID().slice(0, 8),
@@ -46,6 +64,7 @@ export async function POST(request: Request) {
     contact,
     rawText: text,
     analysis,
+    meta,
     status: "new",
     counter: null,
     brandReply: null,
@@ -64,9 +83,11 @@ function formToText(f: BrandForm) {
   return [
     `브랜드: ${f.brandName}`,
     `제품: ${f.product}`,
+    f.category ? `제품 카테고리: ${f.category}` : "",
     `요청 콘텐츠: ${items || "미정"}`,
     `원고료: ${f.budgetWon ? `${f.budgetWon}원` : "제품 제공만 (현금 원고료 없음)"}`,
-    f.schedule ? `업로드 일정: ${f.schedule}` : "",
+    f.uploadDate ? `업로드 일정: ${dateLabel(f.uploadDate)}까지` : f.schedule ? `업로드 일정: ${f.schedule}` : "",
+    f.minUse && f.minUse !== "없음" ? `업로드 전 최소 사용 기간: ${f.minUse}` : "",
     f.usageRights ? `2차 활용: ${f.usageRights}` : "",
     f.exclusivity ? `독점 조건: ${f.exclusivity}` : "",
     f.revisions ? `수정 횟수: ${f.revisions}` : "",

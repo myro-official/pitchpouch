@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { analyzeWithRules } from "./analyze";
+import { detectCategory, MIN_USE, parseDate } from "./meta";
 
 export const USAGE = ["없음", "3개월", "6개월", "1년", "기간 제한 없음"] as const;
 export const REVISIONS = ["1회", "2회", "3회", "제한 없음"] as const;
@@ -14,6 +15,9 @@ export type FormDraft = {
   budgetMan: number | null;
   productOnly: boolean;
   schedule: string | null;
+  category: string | null;
+  uploadDate: string | null;
+  minUse: (typeof MIN_USE)[number] | null;
   usage: (typeof USAGE)[number] | null;
   revisions: (typeof REVISIONS)[number] | null;
   exclusivity: string | null;
@@ -56,7 +60,10 @@ export async function extractForm(text: string): Promise<FormDraft> {
         output_config: { effort: "low", format: zodOutputFormat(Schema) },
         messages: [{ role: "user", content: `<양식>\n${text}\n</양식>` }],
       });
-      if (res.stop_reason !== "refusal" && res.parsed_output) return { ...res.parsed_output, engine: "ai" };
+      if (res.stop_reason !== "refusal" && res.parsed_output) {
+        const o = res.parsed_output;
+        return { ...o, ...metaFrom(text, o.product, o.schedule), engine: "ai" };
+      }
     } catch (err) {
       console.error("[extract] AI 추출 실패, 규칙 추출로 전환", err);
     }
@@ -91,13 +98,14 @@ export function extractWithRules(text: string): FormDraft {
     .join(" / ");
 
   return {
-    brandName: clean(field(text, "브랜드|업체|회사|상호")) ?? r.terms.brand,
+    brandName: clean(field(text, "브랜드|업체|회사|상호")) ?? introBrand(text) ?? r.terms.brand,
     contact: text.match(/[\w.+-]+@[\w-]+\.[\w.]+/)?.[0] ?? text.match(/01[016789][-\s]?\d{3,4}[-\s]?\d{4}/)?.[0] ?? null,
-    product: clean(field(text, "제품|상품|품목")) ?? clean(r.terms.product?.replace(/^(이번에|이번|저희|새로)\s*/, "") ?? null),
+    product: clean(field(text, "제품|상품|품목")) ?? productWord(text) ?? clean(r.terms.product?.replace(/^(이번에|이번|저희|새로)\s*/, "") ?? null),
     deliverables: anyContent ? d : null,
     budgetMan: r.budgetWon !== null ? Math.round(r.budgetWon / 1000) / 10 : null,
     productOnly,
     schedule: clean(field(text, "업로드|게시|일정|마감|기한")) ?? r.terms.schedule,
+    ...metaFrom(text, clean(field(text, "제품|상품|품목")) ?? r.terms.product, clean(field(text, "업로드|게시|일정|마감|기한")) ?? r.terms.schedule),
     usage: usageText ? pickUsage(usageText) : null,
     revisions: revText ? pickRevisions(revText) : null,
     exclusivity: clean(field(text, "독점|경쟁")) ?? r.terms.exclusivity,
@@ -124,4 +132,36 @@ function pickRevisions(t: string): FormDraft["revisions"] {
   const n = Number(t.match(/(\d+)\s*(회|번)/)?.[1]);
   if (!n) return null;
   return n <= 1 ? "1회" : n === 2 ? "2회" : n === 3 ? "3회" : "제한 없음";
+}
+
+// 카테고리·업로드 날짜·최소 사용 기간은 AI와 규칙 모두 같은 방식으로 뽑는다.
+function metaFrom(text: string, product: string | null, schedule: string | null) {
+  const useLine = field(text, "사용\\s*기간|최소\\s*사용|사용\\s*후") ?? text.match(/[^.\n]{0,20}(\d+)\s*(주|일)\s*(이상\s*)?(사용|써)[^.\n]{0,10}/)?.[0] ?? null;
+  return {
+    category: detectCategory(`${product ?? ""} ${text}`),
+    uploadDate: parseDate(schedule) ?? parseDate(field(text, "업로드|게시")),
+    minUse: useLine ? pickMinUse(useLine) : null,
+  };
+}
+
+function pickMinUse(t: string): FormDraft["minUse"] {
+  const w = Number(t.match(/(\d+)\s*주/)?.[1]);
+  const d = Number(t.match(/(\d+)\s*일/)?.[1]);
+  const m = Number(t.match(/(\d+)\s*(개월|달)/)?.[1]);
+  const days = w ? w * 7 : d ? d : m ? m * 30 : 0;
+  if (!days) return null;
+  return days <= 7 ? "1주" : days <= 14 ? "2주" : "4주";
+}
+
+// "블룸데이 브랜드입니다", "저희는 OO코스메틱입니다" 같은 자기소개에서 브랜드명을 읽는다.
+function introBrand(t: string) {
+  const m = t.match(/([가-힣A-Za-z0-9]{2,})\s*(브랜드|코스메틱|뷰티|화장품)?\s*(?:입니다|이에요|예요|에서\s*연락)/);
+  if (!m || /^(브랜드|저희|안녕하세요|담당자|마케팅팀|팀)$/.test(m[1])) return null;
+  return m[2] && m[2] !== "브랜드" ? m[1] + m[2] : m[1];
+}
+
+function productWord(t: string) {
+  return (
+    t.match(/[가-힣A-Za-z0-9]{0,6}\s?(블러셔|치크|틴트|립스틱|쿠션|파운데이션|섀도우|아이섀도|마스카라|마스크팩|수분크림|크림|세럼|앰플|토너|선크림)/)?.[0]?.trim() ?? null
+  );
 }

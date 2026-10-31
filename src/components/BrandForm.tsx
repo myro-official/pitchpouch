@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import type { FormDraft } from "@/lib/extract";
+import { CATEGORIES, dateLabel, MIN_USE } from "@/lib/meta";
 import type { Creator, Deliverables } from "@/lib/types";
 import { IconPaste, IconShield } from "./icons";
 
@@ -54,6 +55,10 @@ export function BrandForm({ handle }: { handle: string }) {
   const [budget, setBudget] = useState("");
   const [productOnly, setProductOnly] = useState(false);
   const [schedule, setSchedule] = useState("");
+  const [uploadDate, setUploadDate] = useState("");
+  const [catTop, setCatTop] = useState("");
+  const [catSub, setCatSub] = useState("");
+  const [minUse, setMinUse] = useState("없음");
   const [usage, setUsage] = useState("없음");
   const [exclusivity, setExclusivity] = useState("");
   const [revisions, setRevisions] = useState("2회");
@@ -97,6 +102,14 @@ export function BrandForm({ handle }: { handle: string }) {
     put(f.product, setProduct);
     put(f.deliverables, setD);
     put(f.schedule, setSchedule);
+    put(f.uploadDate, setUploadDate);
+    put(f.minUse, setMinUse);
+    if (f.category) {
+      const [top, sub] = f.category.split(" · ");
+      setCatTop(top);
+      setCatSub(sub ?? "");
+      n++;
+    }
     put(f.usage, setUsage);
     put(f.revisions, setRevisions);
     put(f.exclusivity, setExclusivity);
@@ -118,8 +131,10 @@ export function BrandForm({ handle }: { handle: string }) {
 
   const items = [d.feed && `피드 ${d.feed}`, d.reels && `릴스 ${d.reels}`, d.story && `스토리 ${d.story}`].filter(Boolean);
   const summaries = {
-    brand: [brandName, product].filter(Boolean).join(" · ") || "브랜드명과 제품을 적어 주세요",
-    content: items.length ? [items.join(", "), schedule].filter(Boolean).join(" · ") : "콘텐츠를 1개 이상 골라 주세요",
+    brand: [brandName, product, catSub || catTop].filter(Boolean).join(" · ") || "브랜드명과 제품을 적어 주세요",
+    content: items.length
+      ? [items.join(", "), uploadDate ? `${dateLabel(uploadDate)}까지` : schedule, minUse !== "없음" && `${minUse} 사용 후`].filter(Boolean).join(" · ")
+      : "콘텐츠를 1개 이상 골라 주세요",
     budget: productOnly ? "현금 없이 제품만 제공" : Number(budget) > 0 ? `${budget}만원` : "원고료를 적어 주세요",
     terms: [`2차 활용 ${usage}`, `수정 ${revisions}`, exclusivity && "독점 있음", memo && "추가 요청 있음"].filter(Boolean).join(" · "),
   };
@@ -138,7 +153,10 @@ export function BrandForm({ handle }: { handle: string }) {
           product,
           deliverables: d,
           budgetWon: productOnly ? null : Number(budget) * 10000,
-          schedule,
+          schedule: uploadDate ? `${dateLabel(uploadDate)}까지` : schedule,
+          category: catTop ? [catTop, catSub].filter(Boolean).join(" · ") : "",
+          uploadDate,
+          minUse,
           usageRights: usage === "없음" ? "" : `브랜드 광고 소재로 2차 활용 (${usage})`,
           exclusivity,
           revisions: revisions === "제한 없음" ? "수정 횟수 제한 없음" : `수정 ${revisions}`,
@@ -179,7 +197,6 @@ export function BrandForm({ handle }: { handle: string }) {
           <br />
           협찬을 제안해요
         </h1>
-        <p className="lead">가입 없이 작성하고, 답변은 이 기기에서 바로 확인할 수 있어요.</p>
         <div className="paste-box">
           {!pasteOpen ? (
             <button className="paste-open" onClick={() => setPasteOpen(true)}>
@@ -227,6 +244,32 @@ export function BrandForm({ handle }: { handle: string }) {
           <label className="label">제품</label>
           <input className="input" value={product} onChange={(e) => setProduct(e.target.value)} placeholder="신제품 진정 세럼 50ml" />
         </div>
+        <div className="field">
+          <label className="label">제품 카테고리</label>
+          <div className="chips">
+            {Object.keys(CATEGORIES).map((c) => (
+              <button
+                key={c}
+                className={`chip ${catTop === c ? "on" : ""}`}
+                onClick={() => {
+                  setCatTop(catTop === c ? "" : c);
+                  setCatSub("");
+                }}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+          {catTop && (
+            <div className="chips sub">
+              {CATEGORIES[catTop].map((c) => (
+                <button key={c} className={`chip ${catSub === c ? "on" : ""}`} onClick={() => setCatSub(catSub === c ? "" : c)}>
+                  {c}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </Fold>
 
       <Fold title="요청 콘텐츠" summary={summaries.content} done={items.length > 0} open={open === "content"} onToggle={() => toggle("content")}>
@@ -249,8 +292,26 @@ export function BrandForm({ handle }: { handle: string }) {
           ))}
         </div>
         <div className="field">
-          <label className="label">업로드 희망 일정</label>
-          <input className="input" value={schedule} onChange={(e) => setSchedule(e.target.value)} placeholder="11월 20일까지" />
+          <label className="label">업로드 희망 일자</label>
+          <input
+            className="input date"
+            type="date"
+            min={new Date().toISOString().slice(0, 10)}
+            value={uploadDate}
+            onChange={(e) => setUploadDate(e.target.value)}
+            onClick={(e) => e.currentTarget.showPicker?.()}
+          />
+          {!uploadDate && schedule && <p className="caption" style={{ marginTop: 6 }}>양식에 적힌 일정: {schedule}</p>}
+        </div>
+        <div className="field">
+          <label className="label">업로드 전 최소 사용 기간</label>
+          <div className="chips">
+            {MIN_USE.map((m) => (
+              <button key={m} className={`chip ${minUse === m ? "on" : ""}`} onClick={() => setMinUse(m)}>
+                {m}
+              </button>
+            ))}
+          </div>
         </div>
       </Fold>
 
