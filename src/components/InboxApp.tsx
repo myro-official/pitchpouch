@@ -64,9 +64,11 @@ const rangeLabel = (r: Range) =>
 
 const groupClass = (id: GroupId) => `c-${GROUPS.find((g) => g.id === id)?.tone || "none"}`;
 
-// 급한 순은 같은 급함 안에서 최신순, 최신순은 받은 시각만 본다
+// 급한 순은 같은 급함 안에서 최신순, 최신순은 같은 시각 안에서 급한 순
 const sorter = (sort: Sort) => (a: Msg, b: Msg) =>
-  sort === "latest" ? a.minutesAgo - b.minutesAgo : b.urgency - a.urgency || a.minutesAgo - b.minutesAgo;
+  sort === "latest"
+    ? a.minutesAgo - b.minutesAgo || b.urgency - a.urgency
+    : b.urgency - a.urgency || a.minutesAgo - b.minutesAgo;
 
 
 export function InboxApp() {
