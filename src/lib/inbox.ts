@@ -47,6 +47,27 @@ export const AXES = [
   { key: "terms", q: "금액이나 조건이 적혀 있나", scale: "예 / 아니오" },
 ] as const;
 
+export type Classified = {
+  category: CategoryId;
+  reply: boolean;
+  urgency: 0 | 1 | 2 | 3;
+  terms: boolean;
+  termsNote: string;
+  reason: string;
+  source: "ai" | "rules";
+};
+
+export type ClassifyUsage = {
+  model: string;
+  ai: number;
+  rules: number;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number | null;
+};
+
+export type ClassifyResponse = { results: ({ id: string } & Classified)[]; usage: ClassifyUsage };
+
 export type Msg = {
   id: string;
   name: string;
@@ -60,6 +81,8 @@ export type Msg = {
   // 금액·조건이 있으면 짧게 뽑아 둔 값
   termsNote?: string;
   reason: string;
+  pasted?: boolean;
+  source?: "ai" | "rules";
 };
 
 export const DEMO: Msg[] = [

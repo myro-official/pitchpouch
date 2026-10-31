@@ -1,10 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AXES, CAT, CATEGORIES, type CategoryId, DEMO, type GroupId, GROUPS, type Msg } from "@/lib/inbox";
-import { IconBack, IconChat, IconCheck, IconEmpty, IconInbox, IconLink, IconList, IconShield } from "./icons";
+import {
+  AXES,
+  CAT,
+  CATEGORIES,
+  type CategoryId,
+  type ClassifyResponse,
+  type ClassifyUsage,
+  DEMO,
+  type GroupId,
+  GROUPS,
+  type Msg,
+} from "@/lib/inbox";
+import { IconBack, IconChat, IconCheck, IconEmpty, IconInbox, IconLink, IconList, IconPaste, IconShield } from "./icons";
 
-type Tab = "inbox" | "rules" | "connect";
+type Tab = "inbox" | "paste" | "rules" | "connect";
 type Filter = "all" | GroupId;
 
 const ME = { handle: "beauty.min", followers: "7.2만" };
@@ -41,8 +52,13 @@ export function InboxApp() {
   const [connected, setConnected] = useState(true);
   const [linking, setLinking] = useState(false);
   const [toast, setToast] = useState("");
+  const [extra, setExtra] = useState<Msg[]>([]);
+  const [usage, setUsage] = useState<ClassifyUsage | null>(null);
 
-  const msgs = useMemo<Msg[]>(() => DEMO.map((m) => ({ ...m, category: overrides[m.id] ?? m.category })), [overrides]);
+  const msgs = useMemo<Msg[]>(
+    () => [...extra, ...DEMO].map((m) => ({ ...m, category: overrides[m.id] ?? m.category })),
+    [extra, overrides],
+  );
   const open = msgs.find((m) => m.id === openId) ?? null;
 
   const goHome = useCallback(() => {
@@ -64,7 +80,14 @@ export function InboxApp() {
     window.scrollTo({ top: 0 });
   };
   // 목업이라 이동은 안내만 한다. 연동 후에는 해당 대화방 링크로 바꾼다.
-  const goChat = (m: Msg) => showToast(`@${m.handle} 채팅방으로 이동해요`);
+  const goChat = (m: Msg) => showToast(m.pasted ? "연동하면 이 DM의 채팅방으로 이동해요" : `@${m.handle} 채팅방으로 이동해요`);
+  const addPasted = (added: Msg[], u: ClassifyUsage) => {
+    setExtra([...added, ...extra]);
+    setUsage(u);
+    setTab("inbox");
+    setFilter("all");
+    showToast(`${added.length}개를 분류했어요`);
+  };
   const link = () => {
     setLinking(true);
     setTimeout(() => {
@@ -137,6 +160,15 @@ export function InboxApp() {
             답장할 건 {needReply}개예요
           </h1>
           <p className="lead">다음에 할 행동으로 나눴어요. 확인하고 바로 채팅방으로 가요.</p>
+          {usage && (
+            <div className="note" style={{ marginTop: 14 }}>
+              방금 {usage.ai > 0 ? `AI ${usage.ai}개` : ""}
+              {usage.ai > 0 && usage.rules > 0 ? ", " : ""}
+              {usage.rules > 0 ? `규칙 ${usage.rules}개` : ""} 분류
+              {usage.ai > 0 && ` · 입력 ${usage.inputTokens.toLocaleString()}, 출력 ${usage.outputTokens.toLocaleString()} 토큰`}
+              {usage.costUsd !== null && usage.ai > 0 && ` · 약 $${usage.costUsd.toFixed(5)}`}
+            </div>
+          )}
 
           <div className="stat-row">
             <div className="stat">
@@ -203,6 +235,8 @@ export function InboxApp() {
             );
           })}
         </section>
+      ) : tab === "paste" ? (
+        <Paste onDone={addPasted} />
       ) : tab === "rules" ? (
         <Rules />
       ) : (
@@ -213,6 +247,7 @@ export function InboxApp() {
         {(
           [
             ["inbox", "받은함", <IconInbox key="i" />],
+            ["paste", "붙여넣기", <IconPaste key="p" />],
             ["rules", "분류 기준", <IconList key="r" size={22} />],
             ["connect", "인스타 연결", <IconLink key="l" />],
           ] as const
@@ -312,7 +347,7 @@ function Detail({
           </button>
         </div>
         <p className="caption">
-          @{m.handle} · {m.ago}
+          {m.pasted ? "붙여넣은 DM" : `@${m.handle}`} · {m.ago}
         </p>
         {shown ? (
           <div className="reply">{m.text}</div>
@@ -329,6 +364,7 @@ function Detail({
       <section className="sec">
         <h2 className="sec-title">이렇게 읽었어요</h2>
         <p className="lead">{m.reason}</p>
+        {m.source && <p className="caption">{m.source === "ai" ? "AI가 읽은 결과예요" : "AI를 쓰지 못해 키워드 규칙으로 분류했어요"}</p>}
         <div className="stat-row">
           <div className="stat">
             <b>{m.reply ? "예" : "아니오"}</b>
@@ -441,5 +477,93 @@ function Connect({
         )}
       </div>
     </section>
+  );
+}
+
+const SAMPLE = [
+  "안녕하세요 에이블랩입니다! 신제품 토너 릴스 1건에 광고비 80만원 제안드려요. 11/18까지 회신 부탁드립니다.",
+  "언니 영상 보고 루틴 따라 했는데 피부결이 달라졌어요 ㅠㅠ 응원해요!",
+  "[당첨 안내] 협찬 이벤트 당첨! 배송비 3,900원만 먼저 결제해 주시면 정품을 보내드려요 bit.ly/abcd",
+  "어제 공구로 주문한 세트 아직 배송이 안 왔어요. 언제 받을 수 있나요?",
+].join("\n\n");
+
+function Paste({ onDone }: { onDone: (added: Msg[], usage: ClassifyUsage) => void }) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const items = text.split(/\n\s*\n/).map((t) => t.trim()).filter(Boolean);
+
+  const submit = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      const stamp = Date.now();
+      const res = await fetch("/api/classify", {
+        method: "POST",
+        body: JSON.stringify({ messages: items.map((t, i) => ({ id: `p${stamp}-${i}`, text: t })) }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "분류하지 못했어요");
+      const data = (await res.json()) as ClassifyResponse;
+      onDone(
+        data.results.map((r, i) => ({
+          id: r.id,
+          name: `붙여넣은 DM ${i + 1}`,
+          handle: "",
+          ago: "방금",
+          text: items[i],
+          category: r.category,
+          reply: r.reply,
+          urgency: r.urgency,
+          terms: r.terms,
+          termsNote: r.termsNote || undefined,
+          reason: r.reason,
+          pasted: true,
+          source: r.source,
+        })),
+        data.usage,
+      );
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "분류하지 못했어요");
+    }
+    setBusy(false);
+  };
+
+  if (busy)
+    return (
+      <section className="sec">
+        <div className="loading">
+          <div className="bar">
+            <i />
+          </div>
+          DM을 하나씩 읽고 있어요
+        </div>
+      </section>
+    );
+
+  return (
+    <>
+      <section className="sec">
+        <h1 className="page-title">DM 붙여넣기</h1>
+        <p className="lead">DM 사이에 빈 줄을 하나 넣어 주세요. 한 번에 20개까지 분류해요.</p>
+        <div className="field">
+          <textarea
+            className="textarea"
+            placeholder={"받은 DM을 붙여넣어 주세요.\n\n빈 줄로 DM을 나눠요."}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+        </div>
+        <button className="link-btn" style={{ marginTop: 6 }} onClick={() => setText(SAMPLE)}>
+          샘플 DM 4개 넣기
+        </button>
+        {items.length > 0 && <p className="caption">DM {items.length}개로 읽었어요</p>}
+        {err && <p className="err">{err}</p>}
+      </section>
+      <div className="cta">
+        <button className="btn" disabled={items.length === 0 || items.length > 20} onClick={submit}>
+          분류하기
+        </button>
+      </div>
+    </>
   );
 }
