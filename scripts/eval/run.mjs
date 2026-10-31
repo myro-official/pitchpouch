@@ -1,8 +1,12 @@
 // 라벨이 붙은 DM으로 신뢰도 기준별 정확도·비용을 비교한다. 사용: node scripts/eval/run.mjs [서버 주소]
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 
 const BASE = process.argv[2] ?? "https://pitchpouch.vercel.app";
-const data = JSON.parse(readFileSync(new URL("./dm-labeled.json", import.meta.url)));
+const dir = new URL("./", import.meta.url);
+const data = readdirSync(dir)
+  .filter((f) => /^dm-labeled.*\.json$/.test(f))
+  .sort()
+  .flatMap((f) => JSON.parse(readFileSync(new URL(f, dir))));
 const LABEL = { gain: "수익 기회", rel: "관계", todo: "처리할 일", junk: "걸러낼 것" };
 
 async function run(threshold) {
@@ -21,15 +25,16 @@ async function run(threshold) {
   return { results, usage };
 }
 
-// 0이면 Jev가 전부 판정, 1.1이면 Claude가 전부 판정. 둘을 합치면 어떤 기준이든 계산할 수 있다.
-const jevRun = await run(0);
-const claudeRun = await run(1.1);
+// 기준을 1.1로 두면 Claude가 전부 판정하면서 응답에 Jev의 판정과 신뢰도도 같이 남는다. 한 번의 호출로 어떤 기준이든 계산할 수 있다.
+const both = await run(1.1);
+const jevRun = both;
+const claudeRun = both;
 const byId = (r) => Object.fromEntries(r.results.map((x) => [x.id, x]));
-const J = byId(jevRun);
-const C = byId(claudeRun);
+const J = byId(both);
+const C = J;
 const sum = (u, k) => u.reduce((n, x) => n + x[k], 0);
 
-const rows = data.map((d) => ({ ...d, jev: J[d.id].group, conf: J[d.id].jev?.confidence ?? null, claude: C[d.id].group, claudeSource: C[d.id].source }));
+const rows = data.map((d) => ({ ...d, jev: J[d.id].jev?.group ?? null, conf: J[d.id].jev?.confidence ?? null, claude: C[d.id].group, claudeSource: C[d.id].source }));
 const missing = rows.filter((r) => r.conf === null).length;
 const claudeFail = rows.filter((r) => r.claudeSource !== "ai").length;
 if (missing || claudeFail) console.log(`주의: Jev 응답 없음 ${missing}개, Claude 대신 규칙 ${claudeFail}개\n`);

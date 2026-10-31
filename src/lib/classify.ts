@@ -24,8 +24,9 @@ export const JEV_USD_PER_M_INPUT = 0.042;
 const GROUP_IDS = GROUPS.map((g) => g.id) as [GroupId, ...GroupId[]];
 const label = (id: GroupId) => GROUPS.find((g) => g.id === id)!.label;
 
-// 공개 주소라 누가 눌러도 키 비용이 무한히 나가지 않도록 시간당 호출 수를 제한한다. 넘으면 다음 단계로 넘어간다.
-const HOURLY_LIMIT = 200;
+// 공개 주소라 누가 눌러도 키 비용이 무한히 나가지 않도록 서버 한 대당 시간당 호출 수를 제한한다. 넘으면 다음 단계로 넘어간다.
+// 1,000회면 Jev와 Claude를 전부 불러도 시간당 $0.2 안쪽이다.
+const HOURLY_LIMIT = 1000;
 const windows = { jev: { start: Date.now(), used: 0 }, ai: { start: Date.now(), used: 0 } };
 function takeBudget(kind: keyof typeof windows) {
   const w = windows[kind];
