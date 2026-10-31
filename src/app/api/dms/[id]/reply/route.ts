@@ -1,4 +1,4 @@
-import { getDm } from "@/lib/dms";
+import { canViewDms, getDm } from "@/lib/dms";
 import { createClient } from "@/lib/supabase/server";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -7,6 +7,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export async function POST(request: Request, ctx: RouteContext<"/api/dms/[id]/reply">) {
   const { data } = await (await createClient()).auth.getUser();
   if (!data.user) return Response.json({ error: "로그인이 필요해요." }, { status: 401 });
+  if (!canViewDms(data.user)) return Response.json({ error: "이 계정에는 연결된 인스타가 없어요." }, { status: 403 });
 
   const { id } = await ctx.params;
   const { text } = (await request.json().catch(() => ({}))) as { text?: unknown };

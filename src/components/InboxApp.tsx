@@ -226,8 +226,12 @@ export function InboxApp() {
     if (!history.state?.pp) history.pushState({ pp: 1 }, "");
     window.scrollTo({ top: 0 });
   };
-  // 목업이라 이동은 안내만 한다. 연동 후에는 해당 대화방 링크로 바꾼다.
-  const goChat = (m: Msg) => showToast(m.pasted ? "연동하면 이 DM의 채팅방으로 이동해요" : `@${m.handle} 채팅방으로 이동해요`);
+  // 실제 DM은 인스타 공식 메시지 링크(ig.me)로 보낸 사람과의 대화방을 연다. 아이디를 못 찾았으면 DM 목록을 연다.
+  const goChat = (m: Msg) => {
+    if (m.pasted) return showToast("붙여넣은 DM은 연결된 대화방이 없어요");
+    const url = m.handle ? `https://ig.me/m/${encodeURIComponent(m.handle)}` : "https://www.instagram.com/direct/inbox/";
+    window.open(url, "_blank", "noopener");
+  };
   const addPasted = (added: Msg[], u: ClassifyUsage) => {
     setExtra([...added, ...extra]);
     setUsage(u);
@@ -797,16 +801,25 @@ function Reply({ onSend }: { onSend: (text: string) => Promise<string | null> })
 }
 
 function Login({ onDone }: { onDone: () => void }) {
+  const [signup, setSignup] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // 가입은 서버가 계정을 만든 뒤(/api/signup) 같은 이메일과 비밀번호로 바로 로그인한다.
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setErr("");
-    const { error } = await createClient().auth.signInWithPassword({ email: email.trim(), password });
+    if (signup) {
+      const res = await fetch("/api/signup", { method: "POST", body: JSON.stringify({ email, password }) });
+      if (!res.ok) {
+        setBusy(false);
+        return setErr(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "가입하지 못했어요.");
+      }
+    }
+    const { error } = await createClient().auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
     setBusy(false);
     if (error) return setErr("이메일이나 비밀번호가 맞지 않아요.");
     onDone();
@@ -814,8 +827,8 @@ function Login({ onDone }: { onDone: () => void }) {
 
   return (
     <section className="sec">
-      <h1 className="page-title">로그인</h1>
-      <p className="lead">로그인하면 연결된 인스타 계정의 DM이 보여요.</p>
+      <h1 className="page-title">{signup ? "회원가입" : "로그인"}</h1>
+      <p className="lead">{signup ? "이메일과 비밀번호만 있으면 바로 시작해요." : "로그인하면 연결된 인스타 계정의 DM이 보여요."}</p>
       <form onSubmit={submit}>
         <div className="field">
           <label className="label" htmlFor="login-email">
@@ -831,7 +844,8 @@ function Login({ onDone }: { onDone: () => void }) {
             id="login-password"
             className="input"
             type="password"
-            autoComplete="current-password"
+            autoComplete={signup ? "new-password" : "current-password"}
+            placeholder={signup ? "8자 이상" : undefined}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
@@ -841,10 +855,20 @@ function Login({ onDone }: { onDone: () => void }) {
             {err}
           </p>
         )}
-        <button className="btn" style={{ marginTop: 20 }} disabled={busy || !email.trim() || !password}>
-          {busy ? "로그인 중" : "로그인"}
+        <button className="btn" style={{ marginTop: 20 }} disabled={busy || !email.trim() || password.length < (signup ? 8 : 1)}>
+          {busy ? (signup ? "가입하는 중" : "로그인 중") : signup ? "가입하기" : "로그인"}
         </button>
       </form>
+      <button
+        className="link-btn"
+        style={{ marginTop: 16 }}
+        onClick={() => {
+          setSignup(!signup);
+          setErr("");
+        }}
+      >
+        {signup ? "이미 계정이 있어요. 로그인하기" : "처음이에요. 회원가입하기"}
+      </button>
     </section>
   );
 }
