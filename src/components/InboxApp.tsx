@@ -801,19 +801,22 @@ function Login({ onDone, onError }: { onDone: () => void; onError: (msg: string)
   const [busy, setBusy] = useState(false);
 
   // 가입은 서버가 계정을 만든 뒤(/api/signup) 같은 이메일과 비밀번호로 바로 로그인한다.
+  // Supabase는 이메일로만 로그인해서, @ 없이 친 아이디(demo1234)는 앱 도메인 주소로 바꾼다.
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    const id = email.trim().toLowerCase();
+    const mail = id.includes("@") ? id : `${id}@pitchpouch.app`;
     setBusy(true);
     if (signup) {
-      const res = await fetch("/api/signup", { method: "POST", body: JSON.stringify({ email, password }) });
+      const res = await fetch("/api/signup", { method: "POST", body: JSON.stringify({ email: mail, password }) });
       if (!res.ok) {
         setBusy(false);
         return onError(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "가입하지 못했어요.");
       }
     }
-    const { error } = await createClient().auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+    const { error } = await createClient().auth.signInWithPassword({ email: mail, password });
     setBusy(false);
-    if (error) return onError("이메일이나 비밀번호가 맞지 않아요.");
+    if (error) return onError("아이디나 비밀번호가 맞지 않아요.");
     onDone();
   };
 
@@ -823,9 +826,9 @@ function Login({ onDone, onError }: { onDone: () => void; onError: (msg: string)
       <form onSubmit={submit}>
         <div className="field">
           <label className="label" htmlFor="login-email">
-            이메일
+            아이디
           </label>
-          <input id="login-email" className="input" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <input id="login-email" className="input" type="text" autoComplete="username" autoCapitalize="none" value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
         <div className="field">
           <label className="label" htmlFor="login-password">

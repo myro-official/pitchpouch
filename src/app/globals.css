@@ -372,7 +372,7 @@ p { text-wrap: pretty; }
 
 /* 읽음 상태, 더 보기 */
 .item.unread .tx b { font-weight: 800; }
-.udot { display: inline-block; width: 8px; height: 8px; border-radius: 99px; background: var(--brand-ink); margin-right: 6px; vertical-align: 1px; }
+.udot { display: inline-block; width: 8px; height: 8px; border-radius: 99px; background: #ff7b86; margin-right: 6px; vertical-align: 1px; }
 .link-btn.more { display: block; margin: 12px auto 0; font-size: 14px; }
 .dev { margin-top: 14px; }
 .dev summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--muted); }
