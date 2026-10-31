@@ -132,7 +132,7 @@ function getClient() {
 
 export type Outcome = { result: Classified; jevInputTokens: number; inputTokens: number; outputTokens: number; note?: string };
 
-export async function classifyDm(text: string): Promise<Outcome> {
+export async function classifyDm(text: string, threshold = CONFIDENCE_THRESHOLD): Promise<Outcome> {
   let jev: Classified["jev"];
   let jevInputTokens = 0;
 
@@ -140,7 +140,7 @@ export async function classifyDm(text: string): Promise<Outcome> {
     try {
       const j = await askJev(text);
       jevInputTokens = j.inputTokens;
-      jev = { group: j.group, confidence: Number(j.confidence.toFixed(2)), accepted: j.confidence >= CONFIDENCE_THRESHOLD };
+      jev = { group: j.group, confidence: Number(j.confidence.toFixed(2)), accepted: j.confidence >= threshold };
       if (jev.accepted) {
         return {
           result: {

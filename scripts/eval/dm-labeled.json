@@ -1,0 +1,242 @@
+[
+ {
+  "id": "1",
+  "group": "gain",
+  "boundary": false,
+  "text": "안녕하세요 비바랩입니다. 신제품 앰플 릴스 1건 광고비 100만원 제안드립니다. 11/25 업로드 가능하실까요?"
+ },
+ {
+  "id": "2",
+  "group": "gain",
+  "boundary": false,
+  "text": "제품 먼저 보내드릴게요! 마음에 드시면 스토리 한 번만 올려주세요 :)"
+ },
+ {
+  "id": "3",
+  "group": "gain",
+  "boundary": false,
+  "text": "저희 브랜드 공구 진행하실 생각 있으세요? 판매가의 20% 수수료로 생각 중이에요"
+ },
+ {
+  "id": "4",
+  "group": "gain",
+  "boundary": false,
+  "text": "12월 팝업스토어 오픈 행사에 게스트로 모시고 싶어요. 사례비 협의 가능합니다"
+ },
+ {
+  "id": "5",
+  "group": "gain",
+  "boundary": false,
+  "text": "안녕하세요 OO엔터 소속 매니저입니다. 전속 계약 관련해서 미팅 가능하실까요?"
+ },
+ {
+  "id": "6",
+  "group": "gain",
+  "boundary": true,
+  "text": "저희 브랜드 모델로 같이 촬영하고 싶어요. 촬영비는 별도로 책정했어요"
+ },
+ {
+  "id": "7",
+  "group": "gain",
+  "boundary": true,
+  "text": "제품 리뷰 부탁드려요. 원고료는 어렵고 제품 세트와 소정의 상품권을 드려요"
+ },
+ {
+  "id": "8",
+  "group": "gain",
+  "boundary": true,
+  "text": "항상 잘 보고 있어요! 저희 샵에서 만든 클렌저 한번 써보실래요? 협찬으로 보내드릴게요"
+ },
+ {
+  "id": "9",
+  "group": "gain",
+  "boundary": false,
+  "text": "유튜브 쇼핑 라이브 게스트로 섭외드려요. 출연료 70만원, 12/5 저녁이에요"
+ },
+ {
+  "id": "10",
+  "group": "gain",
+  "boundary": true,
+  "text": "혹시 광고 문의는 어디로 하면 되나요? 저희 브랜드에서 진행해 보고 싶어서요"
+ },
+ {
+  "id": "11",
+  "group": "rel",
+  "boundary": false,
+  "text": "오늘 영상 보고 힘 얻었어요. 항상 응원합니다!"
+ },
+ {
+  "id": "12",
+  "group": "rel",
+  "boundary": false,
+  "text": "언니 덕분에 피부 자신감 생겼어요 감사해요 ㅠㅠ"
+ },
+ {
+  "id": "13",
+  "group": "rel",
+  "boundary": false,
+  "text": "야 오랜만! 이번 주말에 밥 먹을래?"
+ },
+ {
+  "id": "14",
+  "group": "rel",
+  "boundary": false,
+  "text": "안녕하세요, 뷰티 크리에이터 준비하는 대학생인데 커피 한 잔 사드리고 조언 듣고 싶어요"
+ },
+ {
+  "id": "15",
+  "group": "rel",
+  "boundary": false,
+  "text": "같이 '아침 루틴 vs 저녁 루틴' 릴스 찍어보실래요? 서로 계정에 올려요"
+ },
+ {
+  "id": "16",
+  "group": "rel",
+  "boundary": true,
+  "text": "영상 너무 좋아요! 다음엔 지성 피부 루틴도 올려주세요"
+ },
+ {
+  "id": "17",
+  "group": "rel",
+  "boundary": true,
+  "text": "오프라인에서 한번 뵙고 싶어요. 브랜드 이야기도 조금 나눠보고 싶고요"
+ },
+ {
+  "id": "18",
+  "group": "rel",
+  "boundary": true,
+  "text": "형 저번에 말한 촬영 장소 알아봤어? 괜찮은 데 있더라"
+ },
+ {
+  "id": "19",
+  "group": "rel",
+  "boundary": false,
+  "text": "생일 축하드려요 🎂 항상 건강하세요"
+ },
+ {
+  "id": "20",
+  "group": "rel",
+  "boundary": true,
+  "text": "저도 크리에이터인데 서로 영상에 언급해 주기 어때요? 구독자 교류 차원에서요"
+ },
+ {
+  "id": "21",
+  "group": "todo",
+  "boundary": false,
+  "text": "영상에서 쓰신 선크림 이름이 뭐예요?"
+ },
+ {
+  "id": "22",
+  "group": "todo",
+  "boundary": false,
+  "text": "민감성 피부인데 이 루틴 따라 해도 될까요?"
+ },
+ {
+  "id": "23",
+  "group": "todo",
+  "boundary": false,
+  "text": "주문번호 20481 배송이 일주일째 안 와요 확인 부탁드려요"
+ },
+ {
+  "id": "24",
+  "group": "todo",
+  "boundary": false,
+  "text": "교환하고 싶은데 어떻게 하면 되나요?"
+ },
+ {
+  "id": "25",
+  "group": "todo",
+  "boundary": false,
+  "text": "저희 블로그에 영상 캡처 사용해도 될까요? 출처 표기할게요"
+ },
+ {
+  "id": "26",
+  "group": "todo",
+  "boundary": false,
+  "text": "릴스 영상 저희 매장 모니터에 틀고 싶은데 허락해 주실 수 있나요?"
+ },
+ {
+  "id": "27",
+  "group": "todo",
+  "boundary": true,
+  "text": "따라 했다가 피부가 붉어졌어요. 어떻게 해야 하나요?"
+ },
+ {
+  "id": "28",
+  "group": "todo",
+  "boundary": true,
+  "text": "항상 응원해요! 근데 지난번 영상에서 쓰신 토너 혹시 단종됐나요?"
+ },
+ {
+  "id": "29",
+  "group": "todo",
+  "boundary": true,
+  "text": "공구로 산 제품 설명서가 없어요. 사용법 알려주세요"
+ },
+ {
+  "id": "30",
+  "group": "todo",
+  "boundary": true,
+  "text": "혹시 이 영상 제가 요약해서 카드뉴스로 만들어도 되나요?"
+ },
+ {
+  "id": "31",
+  "group": "junk",
+  "boundary": false,
+  "text": "축하합니다 협찬 당첨! 보증금 5만원 먼저 입금하면 제품 보내드립니다"
+ },
+ {
+  "id": "32",
+  "group": "junk",
+  "boundary": false,
+  "text": "계정 정지 예정입니다. 아래 링크에서 본인 인증하세요 http://ig-verify.example"
+ },
+ {
+  "id": "33",
+  "group": "junk",
+  "boundary": false,
+  "text": "팔로워 5천명 2만원! 좋아요 패키지 문의 주세요"
+ },
+ {
+  "id": "34",
+  "group": "junk",
+  "boundary": false,
+  "text": "[광고] 다이어트 보조제 대량 할인 중! 링크 클릭"
+ },
+ {
+  "id": "35",
+  "group": "junk",
+  "boundary": false,
+  "text": "화장으로 가리면 뭐해 얼굴이 원래 별로인데 ㅋㅋ"
+ },
+ {
+  "id": "36",
+  "group": "junk",
+  "boundary": false,
+  "text": "이런 영상 올리지 마라 꼴보기 싫다"
+ },
+ {
+  "id": "37",
+  "group": "junk",
+  "boundary": false,
+  "text": "🔥"
+ },
+ {
+  "id": "38",
+  "group": "junk",
+  "boundary": false,
+  "text": "ㅋㅋㅋㅋ"
+ },
+ {
+  "id": "39",
+  "group": "junk",
+  "boundary": true,
+  "text": "안녕하세요 저희 제품 단체 협찬 진행 중입니다! 아래 링크로 신청만 하시면 됩니다 bit.ly/xyz"
+ },
+ {
+  "id": "40",
+  "group": "junk",
+  "boundary": true,
+  "text": "님 영상 보고 팔로우했어요 맞팔해요! 선팔했어요"
+ }
+]
