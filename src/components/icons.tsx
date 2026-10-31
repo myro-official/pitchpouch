@@ -97,6 +97,17 @@ export const IconBell = ({ size = 22 }: P) => (
     <path d="M10 20.5a2 2 0 004 0" />
   </svg>
 );
+export const IconSearch = ({ size = 18 }: P) => (
+  <svg {...base(size)}>
+    <circle cx="11" cy="11" r="7" />
+    <path d="M20 20l-4-4" />
+  </svg>
+);
+export const IconClose = ({ size = 18 }: P) => (
+  <svg {...base(size)}>
+    <path d="M6 6l12 12M18 6L6 18" />
+  </svg>
+);
 export const IconSettings = ({ size = 22 }: P) => (
   <svg {...base(size)}>
     <circle cx="12" cy="12" r="3" />

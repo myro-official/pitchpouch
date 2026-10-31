@@ -4,7 +4,7 @@ import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef
 import { type GroupId, GROUPS, type Msg } from "@/lib/inbox";
 import { RangeCalendar } from "./RangeCalendar";
 import { createClient } from "@/lib/supabase/client";
-import { IconBack, IconCalendar, IconCheck, IconEmpty, IconLogo, IconSettings, IconSort } from "./icons";
+import { IconBack, IconCalendar, IconCheck, IconClose, IconEmpty, IconLogo, IconSearch, IconSettings, IconSort } from "./icons";
 
 type Tab = "inbox" | "settings";
 type Filter = "all" | GroupId;
@@ -323,6 +323,14 @@ export function InboxApp() {
           ) : (
             <h1 className="page-title">보관함</h1>
           )}
+          {/* 분류를 옮기면 key가 바뀌어 검색어가 비워진다 */}
+          <Search
+            key={filter}
+            pool={(filter === "all" ? scoped : inGroup(filter)).sort(sorter(sort))}
+            revealed={revealed}
+            showGroup={filter === "all"}
+            onOpen={openMsg}
+          />
           {filter === "all" && (
             <div className="toolbar">
               <Menu label="분류" value={filter} options={filters.map(([id, label]) => [id, label])} onChange={openGroup} />
@@ -541,6 +549,121 @@ const Chevron = () => (
   </svg>
 );
 
+// 검색어와 처음 같은 글자를 강조한다. 잘라 낸 문자열만 넣어서 HTML로 해석되지 않는다.
+function highlight(text: string, needle: string) {
+  const at = text.toLowerCase().indexOf(needle);
+  if (!needle || at < 0) return text;
+  return (
+    <>
+      {text.slice(0, at)}
+      <mark>{text.slice(at, at + needle.length)}</mark>
+      {text.slice(at + needle.length)}
+    </>
+  );
+}
+
+// 근로고래 검색창처럼 치는 동안 아래에 맞는 DM을 띄우고, 누르면 상세를 연다. 찾는 범위는 지금 화면의 필터를 따른다.
+function Search({
+  pool,
+  revealed,
+  showGroup,
+  onOpen,
+}: {
+  pool: Msg[];
+  revealed: Set<string>;
+  showGroup: boolean;
+  onOpen: (id: string) => void;
+}) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
+
+  const needle = q.trim().replace(/^@/, "").toLowerCase();
+  const hits = needle ? pool.filter((m) => [m.name, m.handle, m.text].some((s) => s?.toLowerCase().includes(needle))).slice(0, 8) : [];
+  const pick = (id: string) => {
+    setQ("");
+    setOpen(false);
+    onOpen(id);
+  };
+
+  return (
+    <div className="search" ref={ref}>
+      <IconSearch />
+      <input
+        // type="search"는 크롬에서 Esc를 누르면 검색어까지 지워서 text로 두고 키보드에만 검색 키를 띄운다
+        type="text"
+        enterKeyHint="search"
+        className="search-input"
+        aria-label="DM 검색"
+        placeholder="이름, 아이디, 내용 검색"
+        value={q}
+        onChange={(e) => {
+          setQ(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onClick={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && hits[0]) pick(hits[0].id);
+        }}
+      />
+      {q && (
+        <button
+          className="search-clear"
+          aria-label="검색어 지우기"
+          onClick={() => {
+            setQ("");
+            setOpen(false);
+          }}
+        >
+          <IconClose size={16} />
+        </button>
+      )}
+      {open && needle && (
+        <ul className="search-list" aria-label="검색 결과">
+          {hits.length === 0 ? (
+            <li className="search-none">검색 결과가 없어요</li>
+          ) : (
+            hits.map((m) => {
+              // 스팸은 목록처럼 '내용 보기'를 누르기 전까지 내용을 가린다
+              const hidden = m.group === "junk" && !revealed.has(m.id);
+              // 일치한 곳이 뒤쪽이면 그 앞까지 잘라서 한 줄 안에 보이게 한다
+              const at = m.text.toLowerCase().indexOf(needle);
+              const text = at > 12 ? `…${m.text.slice(at - 8)}` : m.text;
+              return (
+                <li key={m.id}>
+                  <button onClick={() => pick(m.id)}>
+                    <span className="tx">
+                      <b>
+                        {highlight(m.name, needle)}
+                        {m.handle && m.handle !== m.name && <span className="caption"> @{highlight(m.handle, needle)}</span>}
+                      </b>
+                      {!hidden && <small>{highlight(text, needle)}</small>}
+                    </span>
+                    {showGroup && <span className="caption">{GROUPS.find((g) => g.id === m.group)?.label}</span>}
+                  </button>
+                </li>
+              );
+            })
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // 브라우저 기본 select 대신 앱 스타일로 그린 작은 선택 메뉴. 바깥을 누르거나 Esc로 닫힌다.
 function Menu<T extends string>({
   label,
@@ -718,7 +841,7 @@ function Login({ onDone, onError }: { onDone: () => void; onError: (msg: string)
             onChange={(e) => setPassword(e.target.value)}
           />
         </div>
-        <button className="btn" style={{ marginTop: 20 }} disabled={busy || !email.trim() || password.length < (signup ? 8 : 1)}>
+        <button className="btn" style={{ marginTop: 20, opacity: busy ? 1 : undefined }} disabled={busy || !email.trim() || password.length < (signup ? 8 : 1)}>
           {busy ? (signup ? "가입하는 중" : "로그인 중") : signup ? "가입하기" : "로그인"}
         </button>
       </form>

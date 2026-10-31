@@ -231,6 +231,28 @@ p { text-wrap: pretty; }
 /* 아이콘 버튼에서 여는 목록: 버튼 오른쪽 끝에 맞추고 글자 길이만큼만 넓다 */
 .menu-list.pop { left: auto; right: 0; }
 .menu-list.pop button { padding: 10px 10px 10px 12px; gap: 20px; }
+/* 검색창: 툴바 버튼과 같은 높이와 바탕. 글자가 16px보다 작으면 아이폰이 입력할 때 화면을 확대한다 */
+.search { position: relative; margin-top: 16px; }
+.sec-group .search { margin: 0 0 12px; }
+.search > svg { position: absolute; left: 10px; top: 9px; color: var(--muted); pointer-events: none; }
+.search-input {
+  width: 100%; height: 36px; border: 0; border-radius: 10px; background: var(--fill); padding: 0 36px; font-size: 16px; color: var(--ink);
+  outline: none; appearance: none; transition: box-shadow .2s;
+}
+.search-input:focus { box-shadow: 0 0 0 2px var(--brand); }
+.search-input::placeholder { color: var(--muted); font-size: 14px; }
+.search-clear { position: absolute; right: 4px; top: 4px; width: 28px; height: 28px; border: 0; border-radius: 8px; background: none; color: var(--muted); display: grid; place-items: center; }
+.search-list {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 20; list-style: none; padding: 6px;
+  background: var(--surface); border-radius: 12px; box-shadow: 0 10px 28px rgba(0, 0, 0, .12), 0 0 0 1px var(--line);
+}
+.search-list button { width: 100%; display: flex; align-items: center; gap: 12px; border: 0; background: none; text-align: left; padding: 9px 8px; border-radius: 8px; }
+.search-list button:hover { background: var(--fill); }
+.search-list .tx { flex: 1; min-width: 0; }
+.search-list b { display: block; font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-list small { display: block; color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-list mark { background: none; color: var(--brand-ink); font-weight: 800; }
+.search-none { padding: 10px 8px; font-size: 14px; color: var(--muted); }
 .seg .thumb { width: calc((100% - 8px - (var(--n, 3) - 1) * 4px) / var(--n, 3)); }
 .seg button { font-size: 13px; }
 .item .tx small.clash { color: var(--warn-ink); font-weight: 700; }
