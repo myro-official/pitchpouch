@@ -138,15 +138,20 @@ export function Inbox({
   return (
     <>
       <section className="sec">
-        <h1 className="page-title">받은함</h1>
+        <div className="title-row">
+          <h1 className="page-title">받은함</h1>
+          {pro && proposals.length > 1 && (
+            <button className="sort-btn" onClick={() => setSheet("sort")} aria-label="정렬 바꾸기">
+              {SORTS.find(([k]) => k === prefs.sort)?.[1]}
+              <svg viewBox="0 0 24 24" aria-hidden>
+                <path d="m7 10 5 5 5-5" />
+              </svg>
+            </button>
+          )}
+        </div>
         <p className="lead">{proposals.length ? `확인할 제안 ${todo}건` : "링크와 붙여넣기로 받은 제안이 여기 모여요."}</p>
-        {pro && (prefs.sort !== "recent" || tags.length > 0 || prefs.group) && (
+        {pro && (tags.length > 0 || prefs.group) && (
           <div className="active-chips">
-            {prefs.sort !== "recent" && (
-              <button className="chip on" onClick={() => setPrefs({ sort: "recent" })}>
-                {SORTS.find(([k]) => k === prefs.sort)?.[1]} ✕
-              </button>
-            )}
             {tags.map((t) => (
               <button key={t} className="chip tag on" onClick={() => toggleTag(t)}>
                 #{t} ✕
@@ -220,7 +225,6 @@ export function Inbox({
         <Dial
           lifted={picking}
           items={[
-            { key: "sort", label: "정렬", icon: ICON.sort, on: prefs.sort !== "recent", act: () => setSheet("sort") },
             { key: "tags", label: tags.length ? `태그 ${tags.length}개` : "태그로 거르기", icon: ICON.tag, on: tags.length > 0, act: () => setSheet("tags") },
             { key: "group", label: "카테고리 묶기", icon: ICON.group, on: prefs.group, act: () => setSheet("group") },
             {
@@ -236,7 +240,6 @@ export function Inbox({
             ...(conflictCount > 0
               ? [{ key: "clash", label: `겹침 주의 ${conflictCount}건`, icon: ICON.alert, on: tags.includes("겹침 주의"), act: () => setTags(["겹침 주의"]) }]
               : []),
-            { key: "top", label: "맨 위로", icon: ICON.top, on: false, act: () => window.scrollTo({ top: 0, behavior: "smooth" }) },
           ]}
         />
       )}
@@ -524,7 +527,6 @@ const svg = (d: ReactNode) => (
   </svg>
 );
 const ICON = {
-  sort: svg(<path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3" />),
   tag: svg(
     <>
       <path d="M3 12V4a1 1 0 011-1h8l9 9-9 9-9-9z" />
@@ -544,7 +546,6 @@ const ICON = {
     </>,
   ),
   alert: svg(<path d="M12 3l9.5 17h-19L12 3zM12 10v4M12 17.5v.01" />),
-  top: svg(<path d="M12 19V5M5 12l7-7 7 7" />),
 };
 
 type DialItem = { key: string; label: string; icon: ReactNode; on: boolean; act: () => void };
