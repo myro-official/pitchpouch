@@ -255,3 +255,41 @@ p { text-wrap: pretty; }
 .cmp td { font-weight: 600; min-width: 96px; white-space: normal; }
 .cmp td.best { color: var(--ok); }
 .cmp td.bad { color: var(--danger); }
+
+/* 플로팅 메뉴: HairPass 스피드 다이얼 (토큰만 PitchPouch 로즈로) */
+.active-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.dial { position: fixed; right: max(16px, calc(50% - 224px)); bottom: calc(env(safe-area-inset-bottom) + 84px); z-index: 30; display: flex; flex-direction: column; align-items: flex-end; transition: bottom .22s cubic-bezier(.2,.8,.2,1); }
+.dial.lifted { bottom: calc(env(safe-area-inset-bottom) + 158px); }
+.dial-scrim { position: fixed; inset: 0; background: rgba(74,24,48,.32); opacity: 0; visibility: hidden; transition: opacity .32s, visibility .32s; z-index: -1; -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
+.dial.open .dial-scrim { opacity: 1; visibility: visible; }
+.dial-btn { position: relative; width: 58px; height: 58px; border-radius: 50%; border: 0; background: var(--brand-ink); color: #fff; display: grid; place-items: center; cursor: pointer; box-shadow: 0 8px 24px rgba(176,42,98,.36); transition: transform .25s cubic-bezier(.2,.9,.3,1.3), box-shadow .3s; }
+.dial-btn:active { transform: scale(.9); }
+.dial.open .dial-btn { box-shadow: 0 4px 12px rgba(176,42,98,.3); }
+.dial-btn svg { position: absolute; width: 27px; height: 27px; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; transition: transform .45s cubic-bezier(.32,.72,0,1), opacity .25s; }
+.dial-btn .i-x { opacity: 0; transform: rotate(-90deg) scale(.4); }
+.dial.open .dial-btn .i-home { opacity: 0; transform: rotate(90deg) scale(.4); }
+.dial.open .dial-btn .i-x { opacity: 1; transform: none; }
+.dial-dot { position: absolute; top: 6px; right: 6px; width: 10px; height: 10px; border-radius: 99px; background: var(--brand); box-shadow: 0 0 0 2px var(--brand-ink); }
+.dial-menu { display: flex; flex-direction: column-reverse; align-items: flex-end; gap: 12px; margin-bottom: 16px; }
+.dial-item { display: flex; align-items: center; gap: 12px; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; opacity: 0; transform: translateY(28px) scale(.55); transform-origin: right bottom; pointer-events: none; transition: opacity .2s, transform .4s cubic-bezier(.2,.9,.3,1.25); transition-delay: calc(var(--r) * 26ms); }
+.dial.open .dial-item { opacity: 1; transform: none; pointer-events: auto; transition-delay: calc(var(--i) * 55ms); }
+.dl { background: var(--surface); color: var(--ink); font-size: 14px; font-weight: 600; padding: 8px 14px; border-radius: 99px; box-shadow: 0 4px 14px rgba(74,24,48,.18); white-space: nowrap; transition: color .2s; }
+.dc { width: 48px; height: 48px; border-radius: 50%; background: var(--surface); color: var(--brand-ink); display: grid; place-items: center; box-shadow: 0 4px 14px rgba(74,24,48,.22); transition: background-color .25s, color .25s, transform .18s; }
+.dial-item:active .dc { transform: scale(.9); }
+.dc svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.dial-item.on .dc { background: var(--brand-ink); color: #fff; }
+.dial-item.on .dl { color: var(--brand-ink); font-weight: 700; }
+
+/* 아래에서 올라오는 시트 */
+.bsheet { position: fixed; inset: 0; z-index: 40; visibility: hidden; transition: visibility .4s; }
+.bsheet.open { visibility: visible; }
+.bsheet-scrim { position: absolute; inset: 0; background: rgba(25,31,40,.38); opacity: 0; transition: opacity .3s; }
+.bsheet.open .bsheet-scrim { opacity: 1; }
+.bsheet-panel { position: absolute; left: 50%; bottom: 0; width: 100%; max-width: 480px; background: var(--surface); border-radius: 24px 24px 0 0; padding: 10px 20px calc(24px + env(safe-area-inset-bottom)); transform: translate(-50%, 100%); transition: transform .42s var(--spring); max-height: 80dvh; overflow-y: auto; }
+.bsheet.open .bsheet-panel { transform: translate(-50%, 0); }
+.bsheet-grab { width: 40px; height: 4px; border-radius: 99px; background: var(--line); margin: 0 auto 12px; }
+.bsheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.sheet-list { display: flex; flex-direction: column; }
+.sheet-opt { display: flex; align-items: center; justify-content: space-between; border: 0; background: none; padding: 14px 4px; font-size: 16px; font-weight: 600; text-align: left; color: var(--ink); }
+.sheet-opt + .sheet-opt { border-top: 1px solid var(--line); }
+.sheet-opt.on { color: var(--brand-ink); font-weight: 800; }

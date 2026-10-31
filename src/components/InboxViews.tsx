@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { type Conflict, dateLabel, exclusivityOf, minUseDays } from "@/lib/meta";
 import type { Proposal } from "@/lib/types";
 import { IconBack, IconCheck, IconEmpty } from "./icons";
@@ -103,7 +103,7 @@ export function Inbox({
     save(PREF_KEY, next);
   };
   const [tags, setTags] = useState<string[]>([]);
-  const [editOrder, setEditOrder] = useState(false);
+  const [sheet, setSheet] = useState<"sort" | "tags" | "group" | null>(null);
   const [picking, setPicking] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
 
@@ -138,73 +138,24 @@ export function Inbox({
   return (
     <>
       <section className="sec">
-        <div className="title-row">
-          <h1 className="page-title">받은함</h1>
-          {pro && proposals.length > 1 && (
-            <button
-              className={`chip ${picking ? "on" : ""}`}
-              onClick={() => {
-                setPicking(!picking);
-                setPicked([]);
-              }}
-            >
-              {picking ? "비교 취소" : "골라서 비교"}
-            </button>
-          )}
-        </div>
+        <h1 className="page-title">받은함</h1>
         <p className="lead">{proposals.length ? `확인할 제안 ${todo}건` : "링크와 붙여넣기로 받은 제안이 여기 모여요."}</p>
-        {conflictCount > 0 && (
-          <button className="note warn banner" onClick={() => setTags(["겹침 주의"])}>
-            서로 조건이 겹치는 제안이 {conflictCount}건 있어요. 눌러서 모아 보기
-          </button>
-        )}
-
-        {pro && proposals.length > 1 && (
-          <div className="filters">
-            <label className="label">정렬</label>
-            <div className="chips scroll">
-              {SORTS.map(([k, label]) => (
-                <button key={k} className={`chip ${prefs.sort === k ? "on" : ""}`} onClick={() => setPrefs({ sort: k })}>
-                  {label}
-                </button>
-              ))}
-            </div>
-            <label className="label" style={{ marginTop: 14 }}>
-              태그로 거르기
-            </label>
-            <div className="chips scroll">
-              {TAGS.map(([t]) => (
-                <button key={t} className={`chip tag ${tags.includes(t) ? "on" : ""}`} onClick={() => toggleTag(t)}>
-                  #{t}
-                </button>
-              ))}
-            </div>
-            <div className="group-row">
-              <button className={`switch ${prefs.group ? "on" : ""}`} onClick={() => setPrefs({ group: !prefs.group })} aria-pressed={prefs.group}>
-                <i />
+        {pro && (prefs.sort !== "recent" || tags.length > 0 || prefs.group) && (
+          <div className="active-chips">
+            {prefs.sort !== "recent" && (
+              <button className="chip on" onClick={() => setPrefs({ sort: "recent" })}>
+                {SORTS.find(([k]) => k === prefs.sort)?.[1]} ✕
               </button>
-              <span>카테고리끼리 묶기</span>
-              {prefs.group && (
-                <button className="link-btn" style={{ marginLeft: "auto" }} onClick={() => setEditOrder(!editOrder)}>
-                  {editOrder ? "순서 저장" : "묶음 순서 바꾸기"}
-                </button>
-              )}
-            </div>
-            {prefs.group && editOrder && (
-              <div className="order-list">
-                {prefs.order.map((g, i) => (
-                  <div key={g} className="order-item">
-                    <b>{i + 1}</b>
-                    <span>{g}</span>
-                    <button onClick={() => move(i, -1)} disabled={i === 0} aria-label={`${g} 위로`}>
-                      ↑
-                    </button>
-                    <button onClick={() => move(i, 1)} disabled={i === prefs.order.length - 1} aria-label={`${g} 아래로`}>
-                      ↓
-                    </button>
-                  </div>
-                ))}
-              </div>
+            )}
+            {tags.map((t) => (
+              <button key={t} className="chip tag on" onClick={() => toggleTag(t)}>
+                #{t} ✕
+              </button>
+            ))}
+            {prefs.group && (
+              <button className="chip on" onClick={() => setPrefs({ group: false })}>
+                카테고리 묶음 ✕
+              </button>
             )}
           </div>
         )}
@@ -265,6 +216,99 @@ export function Inbox({
           </button>
         </div>
       )}
+      {pro && proposals.length > 1 && (
+        <Dial
+          lifted={picking}
+          items={[
+            { key: "sort", label: "정렬", icon: ICON.sort, on: prefs.sort !== "recent", act: () => setSheet("sort") },
+            { key: "tags", label: tags.length ? `태그 ${tags.length}개` : "태그로 거르기", icon: ICON.tag, on: tags.length > 0, act: () => setSheet("tags") },
+            { key: "group", label: "카테고리 묶기", icon: ICON.group, on: prefs.group, act: () => setSheet("group") },
+            {
+              key: "compare",
+              label: picking ? "비교 취소" : "골라서 비교",
+              icon: ICON.compare,
+              on: picking,
+              act: () => {
+                setPicking(!picking);
+                setPicked([]);
+              },
+            },
+            ...(conflictCount > 0
+              ? [{ key: "clash", label: `겹침 주의 ${conflictCount}건`, icon: ICON.alert, on: tags.includes("겹침 주의"), act: () => setTags(["겹침 주의"]) }]
+              : []),
+            { key: "top", label: "맨 위로", icon: ICON.top, on: false, act: () => window.scrollTo({ top: 0, behavior: "smooth" }) },
+          ]}
+        />
+      )}
+      <Sheet open={sheet !== null} title={sheet === "sort" ? "정렬" : sheet === "tags" ? "태그로 거르기" : "카테고리 묶기"} onClose={() => setSheet(null)}>
+        {sheet === "sort" && (
+          <div className="sheet-list">
+            {SORTS.map(([k, label]) => (
+              <button
+                key={k}
+                className={`sheet-opt ${prefs.sort === k ? "on" : ""}`}
+                onClick={() => {
+                  setPrefs({ sort: k });
+                  setSheet(null);
+                }}
+              >
+                {label}
+                {prefs.sort === k && <IconCheck size={16} />}
+              </button>
+            ))}
+          </div>
+        )}
+        {sheet === "tags" && (
+          <>
+            <div className="chips">
+              {TAGS.map(([t]) => (
+                <button key={t} className={`chip tag ${tags.includes(t) ? "on" : ""}`} onClick={() => toggleTag(t)}>
+                  #{t}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
+              <button className="btn ghost" style={{ flex: "0 0 32%" }} onClick={() => setTags([])}>
+                지우기
+              </button>
+              <button className="btn" onClick={() => setSheet(null)}>
+                {filtered.length}개 보기
+              </button>
+            </div>
+          </>
+        )}
+        {sheet === "group" && (
+          <>
+            <div className="group-row" style={{ marginTop: 0 }}>
+              <button className={`switch ${prefs.group ? "on" : ""}`} onClick={() => setPrefs({ group: !prefs.group })} aria-pressed={prefs.group}>
+                <i />
+              </button>
+              <span>스킨케어는 스킨케어끼리, 색조는 색조끼리</span>
+            </div>
+            {prefs.group && (
+              <>
+                <label className="label" style={{ marginTop: 18 }}>
+                  묶음 순서
+                </label>
+                <div className="order-list" style={{ marginTop: 0 }}>
+                  {prefs.order.map((g, i) => (
+                    <div key={g} className="order-item">
+                      <b>{i + 1}</b>
+                      <span>{g}</span>
+                      <button onClick={() => move(i, -1)} disabled={i === 0} aria-label={`${g} 위로`}>
+                        ↑
+                      </button>
+                      <button onClick={() => move(i, 1)} disabled={i === prefs.order.length - 1} aria-label={`${g} 아래로`}>
+                        ↓
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </Sheet>
     </>
   );
 }
@@ -469,5 +513,105 @@ export function Alerts({
         </div>
       )}
     </section>
+  );
+}
+
+/* ---------- 플로팅 메뉴 (HairPass 스피드 다이얼) ---------- */
+
+const svg = (d: ReactNode) => (
+  <svg viewBox="0 0 24 24" aria-hidden>
+    {d}
+  </svg>
+);
+const ICON = {
+  sort: svg(<path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3" />),
+  tag: svg(
+    <>
+      <path d="M3 12V4a1 1 0 011-1h8l9 9-9 9-9-9z" />
+      <circle cx="8" cy="8" r="1.5" />
+    </>,
+  ),
+  group: svg(
+    <>
+      <rect x="3" y="4" width="18" height="6" rx="2" />
+      <rect x="3" y="14" width="18" height="6" rx="2" />
+    </>,
+  ),
+  compare: svg(
+    <>
+      <rect x="3" y="4" width="7" height="16" rx="2" />
+      <rect x="14" y="4" width="7" height="16" rx="2" />
+    </>,
+  ),
+  alert: svg(<path d="M12 3l9.5 17h-19L12 3zM12 10v4M12 17.5v.01" />),
+  top: svg(<path d="M12 19V5M5 12l7-7 7 7" />),
+};
+
+type DialItem = { key: string; label: string; icon: ReactNode; on: boolean; act: () => void };
+
+function Dial({ items, lifted }: { items: DialItem[]; lifted: boolean }) {
+  const [open, setOpen] = useState(false);
+  const btn = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        btn.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+  const n = items.length;
+  const active = items.some((i) => i.on && i.key !== "compare");
+  return (
+    <div className={`dial ${open ? "open" : ""} ${lifted ? "lifted" : ""}`}>
+      <div className="dial-scrim" onClick={() => setOpen(false)} />
+      <div className="dial-menu" inert={!open}>
+        {items.map((it, i) => (
+          <button
+            key={it.key}
+            className={`dial-item ${it.on ? "on" : ""}`}
+            style={{ ["--i" as string]: i, ["--r" as string]: n - 1 - i }}
+            tabIndex={open ? 0 : -1}
+            onClick={() => {
+              setOpen(false);
+              it.act();
+            }}
+          >
+            <span className="dl">{it.label}</span>
+            <span className="dc">{it.icon}</span>
+          </button>
+        ))}
+      </div>
+      <button ref={btn} className="dial-btn" aria-expanded={open} aria-label={open ? "메뉴 닫기" : "정렬·필터 메뉴 열기"} onClick={() => setOpen(!open)}>
+        <svg className="i-home" viewBox="0 0 24 24" aria-hidden>
+          <path d="M4 6h16M7 12h10M10 18h4" />
+        </svg>
+        <svg className="i-x" viewBox="0 0 24 24" aria-hidden>
+          <path d="M6 6l12 12M18 6L6 18" />
+        </svg>
+        {active && !open && <span className="dial-dot" />}
+      </button>
+    </div>
+  );
+}
+
+function Sheet({ open, title, onClose, children }: { open: boolean; title: string; onClose: () => void; children: ReactNode }) {
+  return (
+    <div className={`bsheet ${open ? "open" : ""}`} inert={!open}>
+      <div className="bsheet-scrim" onClick={onClose} />
+      <div className="bsheet-panel" role="dialog" aria-label={title}>
+        <div className="bsheet-grab" />
+        <div className="bsheet-head">
+          <h2 className="sec-title">{title}</h2>
+          <button className="link-btn" onClick={onClose}>
+            닫기
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
   );
 }
