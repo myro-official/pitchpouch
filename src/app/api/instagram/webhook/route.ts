@@ -1,11 +1,11 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { after } from "next/server";
-import { type DmData, saveDm } from "@/lib/dms";
+import { classifyDm } from "@/lib/classify";
+import { saveDm } from "@/lib/dms";
 import type { Msg } from "@/lib/inbox";
 
 type Messaging = { sender: { id: string }; message?: { mid: string; text?: string; is_echo?: boolean } };
 type Payload = { entry?: { messaging?: Messaging[] }[] };
-type Classified = Pick<Msg, "category" | "reply" | "urgency" | "terms" | "termsNote" | "reason">;
 
 // Unified login(비즈니스 포트폴리오 시스템 사용자 토큰)이라 graph.instagram.com이 아니라 graph.facebook.com을 쓴다.
 const IG_API = "https://graph.facebook.com/v24.0";
@@ -47,9 +47,9 @@ function validSignature(raw: Buffer, header: string | null) {
 }
 
 async function ingest(mid: string, senderId: string, text: string) {
-  const [who, cls] = await Promise.all([profile(senderId), classify(text)]);
-  const data: DmData = { ...who, text, ...cls };
-  await saveDm(mid, data);
+  // classifyDm은 Jev나 Claude가 실패해도 키워드 규칙으로 결과를 내서, 분류 때문에 저장이 빠지지 않는다.
+  const [who, { result }] = await Promise.all([profile(senderId), classifyDm(text)]);
+  await saveDm(mid, { ...who, text, ...result });
 }
 
 // 보낸 사람의 아이디. 이 토큰으로는 프로필 조회(/{IGSID})가 막혀서 대화 참여자 목록에서 찾는다.
@@ -65,10 +65,4 @@ async function profile(igsid: string): Promise<Pick<Msg, "name" | "handle">> {
   const j = (await res.json()) as { data?: { participants: { data: { id: string; username: string }[] } }[] };
   const handle = j.data?.flatMap((c) => c.participants.data).find((p) => p.id === igsid)?.username;
   return handle ? { name: handle, handle } : { name: "인스타 사용자", handle: "" };
-}
-
-// shortcut: 분류는 형이 만드는 Jev + Claude 코드로 이 함수만 바꾼다. 그 전까지는 전부 "문의"로 넣는다.
-async function classify(text: string): Promise<Classified> {
-  void text;
-  return { category: "inquiry", reply: true, urgency: 0, terms: false, reason: "아직 분류 전이에요" };
 }

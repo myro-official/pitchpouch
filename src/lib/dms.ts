@@ -1,8 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Msg } from "./inbox";
 
-// 실제 인스타 DM 저장소(supabase/schema.sql의 dms). 로그인이 없어 서버가 service role로만 읽고 쓴다.
-export type DmData = Omit<Msg, "id" | "ago">;
+// 실제 인스타 DM 저장소(supabase/migrations의 dms). 로그인이 없어 서버가 service role로만 읽고 쓴다.
+// 읽음·처리 여부는 화면이 들고 있어서 저장하지 않는다.
+export type DmData = Omit<Msg, "id" | "minutesAgo" | "read" | "done">;
 type Row = { id: string; data: DmData; created_at: string };
 
 function db() {
@@ -21,13 +22,11 @@ export async function saveDm(id: string, data: DmData) {
 export async function listDms(): Promise<Msg[]> {
   const { data, error } = await db().from("dms").select("id, data, created_at").order("created_at", { ascending: false }).limit(50);
   if (error) throw new Error(`[dms] ${error.code} ${error.message}`);
-  return ((data ?? []) as Row[]).map((r) => ({ ...r.data, id: r.id, ago: ago(r.created_at) }));
-}
-
-function ago(iso: string) {
-  const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  if (min < 1) return "방금";
-  if (min < 60) return `${min}분 전`;
-  if (min < 1440) return `${Math.floor(min / 60)}시간 전`;
-  return `${Math.floor(min / 1440)}일 전`;
+  return ((data ?? []) as Row[]).map((r) => ({
+    ...r.data,
+    id: r.id,
+    minutesAgo: Math.floor((Date.now() - new Date(r.created_at).getTime()) / 60000),
+    read: false,
+    done: false,
+  }));
 }
