@@ -333,6 +333,7 @@ p { text-wrap: pretty; }
 .item .go { flex: 0 0 40px; height: 40px; border: 0; border-radius: 12px; background: var(--brand-weak); color: var(--brand-ink); display: grid; place-items: center; transition: transform .15s; }
 .item .go:active { transform: scale(.92); }
 .badge.pick { border: 0; font: inherit; font-size: 12px; font-weight: 700; }
+.badge.pick .caret { font-size: 17px; line-height: 1; margin-left: 1px; }
 .badge.pick.c-new { background: var(--brand-weak); color: var(--brand-ink); }
 .badge.pick.c-ok { background: var(--ok-weak); color: var(--ok); }
 .badge.pick.c-warn { background: var(--warn-bg); color: var(--warn-ink); }

@@ -451,7 +451,7 @@ function Detail({
             {m.name}
           </h1>
           <button className={`badge pick ${groupClass(m.group)}`} onClick={onChange} aria-label={`분류 바꾸기, 지금은 ${g.label}`}>
-            {g.label} ▾
+            {g.label} <span className="caret" aria-hidden="true">▾</span>
           </button>
         </div>
         <p className="caption">
