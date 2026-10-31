@@ -2,9 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  CAT,
-  CATEGORIES,
-  type CategoryId,
   type ClassifyResponse,
   type ClassifyUsage,
   DEMO,
@@ -13,18 +10,13 @@ import {
   type Msg,
 } from "@/lib/inbox";
 import { IconBack, IconChat, IconCheck, IconEmpty, IconInbox, IconLink, IconPaste, IconShield } from "./icons";
-import { Dial } from "./Dial";
 
 type Tab = "inbox" | "paste" | "connect";
 type Filter = "all" | GroupId;
 
 const ME = { handle: "beauty.min", followers: "7.2만" };
 
-function catClass(id: CategoryId) {
-  if (id === "abuse" || id === "scam") return "c-bad";
-  const tone = GROUPS.find((g) => g.id === CAT[id].group)?.tone;
-  return `c-${tone || "none"}`;
-}
+const groupClass = (id: GroupId) => `c-${GROUPS.find((g) => g.id === id)?.tone || "none"}`;
 
 // 급한 순, 같으면 받은 순
 const byUrgency = (a: Msg, b: Msg) => b.urgency - a.urgency;
@@ -32,7 +24,6 @@ const byUrgency = (a: Msg, b: Msg) => b.urgency - a.urgency;
 function Pills({ m }: { m: Msg }) {
   return (
     <div className="pills">
-      <i className={catClass(m.category)}>{CAT[m.category].label}</i>
       {m.reply && <i>답장 필요</i>}
       {m.urgency >= 2 && <i className="warn">급함 {m.urgency}</i>}
       {m.terms && <i>조건 있음</i>}
@@ -43,10 +34,9 @@ function Pills({ m }: { m: Msg }) {
 export function InboxApp() {
   const [tab, setTab] = useState<Tab>("inbox");
   const [filter, setFilter] = useState<Filter>("all");
-  const [sub, setSub] = useState<CategoryId | null>(null);
   const [junkOpen, setJunkOpen] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [overrides, setOverrides] = useState<Record<string, CategoryId>>({});
+  const [overrides, setOverrides] = useState<Record<string, GroupId>>({});
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
   const [sheet, setSheet] = useState(false);
   const [connected, setConnected] = useState(true);
@@ -56,7 +46,7 @@ export function InboxApp() {
   const [usage, setUsage] = useState<ClassifyUsage | null>(null);
 
   const msgs = useMemo<Msg[]>(
-    () => [...extra, ...DEMO].map((m) => ({ ...m, category: overrides[m.id] ?? m.category })),
+    () => [...extra, ...DEMO].map((m) => ({ ...m, group: overrides[m.id] ?? m.group })),
     [extra, overrides],
   );
   const open = msgs.find((m) => m.id === openId) ?? null;
@@ -99,21 +89,18 @@ export function InboxApp() {
   const needReply = msgs.filter((m) => m.reply).length;
   const urgent = msgs.filter((m) => m.urgency >= 2).length;
   const withTerms = msgs.filter((m) => m.terms).length;
-  const inGroup = (g: GroupId) => msgs.filter((m) => CAT[m.category].group === g);
-  const visible = (g: GroupId) =>
-    inGroup(g)
-      .filter((m) => filter === "all" || !sub || m.category === sub)
-      .sort(byUrgency);
+  const inGroup = (g: GroupId) => msgs.filter((m) => m.group === g);
+  const visible = (g: GroupId) => inGroup(g).sort(byUrgency);
 
   const Row = ({ m }: { m: Msg }) => {
-    const hidden = m.category === "abuse" && !revealed.has(m.id);
+    const hidden = m.group === "junk" && !revealed.has(m.id);
     return (
       <div className="item">
         <button className="row-main" onClick={() => openMsg(m.id)}>
           <span className="tile">{m.name.slice(0, 1)}</span>
           <span className="tx">
             <b>{m.name}</b>
-            <small>{hidden ? "상처가 될 수 있어 가려 뒀어요" : m.text}</small>
+            <small>{hidden ? "걸러낸 메시지라 가려 뒀어요" : m.text}</small>
             <Pills m={m} />
           </span>
           <span className="caption">{m.ago}</span>
@@ -149,7 +136,7 @@ export function InboxApp() {
       {open ? (
         <Detail
           m={open}
-          shown={open.category !== "abuse" || revealed.has(open.id)}
+          shown={open.group !== "junk" || revealed.has(open.id)}
           onReveal={() => setRevealed(new Set([...revealed, open.id]))}
           onBack={() => history.back()}
           onChange={() => setSheet(true)}
@@ -165,12 +152,10 @@ export function InboxApp() {
           <p className="lead">다음에 할 행동으로 나눴어요. 확인하고 바로 채팅방으로 가요.</p>
           {usage && (
             <div className="note" style={{ marginTop: 14 }}>
-              방금 {usage.ai > 0 ? `AI ${usage.ai}개` : ""}
-              {usage.ai > 0 && usage.rules > 0 ? ", " : ""}
-              {usage.rules > 0 ? `규칙 ${usage.rules}개` : ""} 분류
-              {usage.ai > 0 && ` · 입력 ${usage.inputTokens.toLocaleString()}, 출력 ${usage.outputTokens.toLocaleString()} 토큰`}
+              방금 Jev {usage.jev}개 · {usage.model.replace("claude-", "")} {usage.ai}개 · 규칙 {usage.rules}개 (Jev 신뢰도 {Math.round(usage.threshold * 100)}% 이상만 Jev 판정)
+              {usage.jevInputTokens > 0 && ` · Jev 입력 ${usage.jevInputTokens.toLocaleString()}토큰`}
+              {usage.ai > 0 && ` · Claude 입력 ${usage.inputTokens.toLocaleString()}, 출력 ${usage.outputTokens.toLocaleString()}토큰`}
               {usage.costUsd !== null && usage.ai > 0 && ` · 약 $${usage.costUsd.toFixed(5)}`}
-              {` · 1차 확신도 ${Math.round(usage.threshold * 100)}% 이상 ${usage.constrained}개`}
             </div>
           )}
 
@@ -192,22 +177,12 @@ export function InboxApp() {
           <div className="filters">
             <div className="chips scroll">
               {filters.map(([id, label, n]) => (
-                <button key={id} className={`chip ${filter === id ? "on" : ""}`} onClick={() => {
-                    setFilter(id);
-                    setSub(null);
-                  }}>
+                <button key={id} className={`chip ${filter === id ? "on" : ""}`} onClick={() => setFilter(id)}>
                   {label} {n}
                 </button>
               ))}
             </div>
           </div>
-          {filter !== "all" && sub && (
-            <div className="active-chips">
-              <button className="chip on" onClick={() => setSub(null)}>
-                {CAT[sub].label} ✕
-              </button>
-            </div>
-          )}
 
           {shown.map((g) => {
             const list = visible(g.id);
@@ -249,22 +224,6 @@ export function InboxApp() {
         <Connect connected={connected} linking={linking} onLink={link} onUnlink={() => setConnected(false)} />
       )}
 
-      {tab === "inbox" && !open && filter !== "all" && (
-        <Dial
-          title={GROUPS.find((g) => g.id === filter)!.label}
-          items={[
-            { key: "all", label: "전체", count: inGroup(filter).length, on: !sub, act: () => setSub(null) },
-            ...CATEGORIES.filter((c) => c.group === filter).map((c) => ({
-              key: c.id,
-              label: c.label,
-              count: inGroup(filter).filter((m) => m.category === c.id).length,
-              on: sub === c.id,
-              act: () => setSub(sub === c.id ? null : c.id),
-            })),
-          ]}
-        />
-      )}
-
       <nav className="tabbar">
         {(
           [
@@ -299,36 +258,29 @@ export function InboxApp() {
               닫기
             </button>
           </div>
-          {GROUPS.map((g) => (
-            <div key={g.id}>
-              <p className="group-title" style={{ marginTop: 14 }}>
-                {g.label}
-              </p>
-              <div className="sheet-list">
-                {CATEGORIES.filter((c) => c.group === g.id).map((c) => {
-                  const on = open?.category === c.id;
-                  return (
-                    <button
-                      key={c.id}
-                      className={`sheet-opt ${on ? "on" : ""}`}
-                      onClick={() => {
-                        if (!open) return;
-                        setOverrides({ ...overrides, [open.id]: c.id });
-                        setSheet(false);
-                        showToast(`${c.label}(으)로 바꿨어요`);
-                      }}
-                    >
-                      <span>
-                        {c.label}
-                        <small className="opt-desc">{c.desc}</small>
-                      </span>
-                      {on && <IconCheck size={18} />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+          <div className="sheet-list">
+            {GROUPS.map((g) => {
+              const on = open?.group === g.id;
+              return (
+                <button
+                  key={g.id}
+                  className={`sheet-opt ${on ? "on" : ""}`}
+                  onClick={() => {
+                    if (!open) return;
+                    setOverrides({ ...overrides, [open.id]: g.id });
+                    setSheet(false);
+                    showToast(`${g.label}(으)로 바꿨어요`);
+                  }}
+                >
+                  <span>
+                    {g.label}
+                    <small className="opt-desc">{g.desc}</small>
+                  </span>
+                  {on && <IconCheck size={18} />}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -352,7 +304,7 @@ function Detail({
   onChange: () => void;
   onGo: () => void;
 }) {
-  const c = CAT[m.category];
+  const g = GROUPS.find((x) => x.id === m.group)!;
   return (
     <>
       <section className="sec" style={{ paddingBottom: 8 }}>
@@ -363,8 +315,8 @@ function Detail({
           <h1 className="page-title" style={{ flex: 1 }}>
             {m.name}
           </h1>
-          <button className={`badge pick ${catClass(m.category)}`} onClick={onChange}>
-            {c.label} ▾
+          <button className={`badge pick ${groupClass(m.group)}`} onClick={onChange}>
+            {g.label} ▾
           </button>
         </div>
         <p className="caption">
@@ -374,7 +326,7 @@ function Detail({
           <div className="reply">{m.text}</div>
         ) : (
           <div className="reply">
-            상처가 될 수 있는 내용이라 가려 뒀어요.
+            걸러낸 메시지라 가려 뒀어요.
             <button className="btn ghost sm" style={{ marginTop: 10, display: "flex" }} onClick={onReveal}>
               내용 보기
             </button>
@@ -385,11 +337,15 @@ function Detail({
       <section className="sec">
         <h2 className="sec-title">이렇게 읽었어요</h2>
         <p className="lead">{m.reason}</p>
-        {m.source && <p className="caption">{m.source === "ai" ? "AI가 읽은 결과예요" : "AI를 쓰지 못해 키워드 규칙으로 분류했어요"}</p>}
-        {m.stage && (
+        {m.source && (
           <p className="caption">
-            1차 그룹 판정: {GROUPS.find((g) => g.id === m.stage!.group)?.label} · 확신도 {Math.round(m.stage.confidence * 100)}%
-            {m.stage.constrained ? " (기준 이상, 그룹 안에서만 소분류)" : " (기준 미만, 16개 전체에서 판단)"}
+            {m.source === "jev" ? "Jev가 분류했어요" : m.source === "ai" ? "Claude가 분류했어요" : "AI를 쓰지 못해 키워드 규칙으로 분류했어요"}
+          </p>
+        )}
+        {m.jev && (
+          <p className="caption">
+            Jev 판정: {GROUPS.find((x) => x.id === m.jev!.group)?.label} · 신뢰도 {Math.round(m.jev.confidence * 100)}%
+            {m.jev.accepted ? " (기준 이상, Jev 판정 사용)" : " (기준 미만, Claude가 다시 분류)"}
           </p>
         )}
         <div className="stat-row">
@@ -501,7 +457,7 @@ function Paste({ onDone }: { onDone: (added: Msg[], usage: ClassifyUsage) => voi
           handle: "",
           ago: "방금",
           text: items[i],
-          category: r.category,
+          group: r.group,
           reply: r.reply,
           urgency: r.urgency,
           terms: r.terms,
@@ -509,7 +465,7 @@ function Paste({ onDone }: { onDone: (added: Msg[], usage: ClassifyUsage) => voi
           reason: r.reason,
           pasted: true,
           source: r.source,
-          stage: r.stage,
+          jev: r.jev,
         })),
         data.usage,
       );

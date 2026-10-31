@@ -1,13 +1,25 @@
 export type GroupId = "gain" | "rel" | "todo" | "junk";
 
-export type Group = { id: GroupId; label: string; hint: string; tone: "new" | "ok" | "warn" | "" };
+export type Group = { id: GroupId; label: string; hint: string; tone: "new" | "ok" | "warn" | ""; desc: string };
 
 // 화면의 받은함 탭이 그대로 나오도록 "크리에이터가 다음에 할 행동"으로 묶는다.
 export const GROUPS: Group[] = [
-  { id: "gain", label: "수익 기회", hint: "조건을 보고 답할 제안", tone: "new" },
-  { id: "rel", label: "관계", hint: "사람과 이어지는 연락", tone: "ok" },
-  { id: "todo", label: "처리할 일", hint: "내가 해결해 줘야 하는 것", tone: "warn" },
-  { id: "junk", label: "걸러낼 것", hint: "안 봐도 되는 것", tone: "" },
+  {
+    id: "gain", label: "수익 기회", hint: "조건을 보고 답할 제안", tone: "new",
+    desc: "돈이나 제품이 오가는 제안. 협찬, 유료 광고, 공동구매, 행사·섭외, 소속 영입처럼 크리에이터가 조건을 보고 수락 여부를 정하는 것",
+  },
+  {
+    id: "rel", label: "관계", hint: "사람과 이어지는 연락", tone: "ok",
+    desc: "돈이 오가지 않는 사람 간의 연락. 팬 응원·안부, 아는 사람의 사적인 연락, 커피챗 요청, 다른 크리에이터의 콜라보 제안",
+  },
+  {
+    id: "todo", label: "처리할 일", hint: "내가 해결해 줘야 하는 것", tone: "warn",
+    desc: "크리에이터가 직접 해결해 줘야 하는 일. 내 콘텐츠나 제품에 대한 문의, 내가 파는 상품의 주문·배송·환불, 내 사진·영상 사용 허락 요청",
+  },
+  {
+    id: "junk", label: "걸러낼 것", hint: "안 봐도 되는 것", tone: "",
+    desc: "답장할 가치가 없거나 해로운 것. 선입금을 요구하는 사기, 악플·성희롱, 나와 무관한 영업·스팸, 스토리에 달린 이모지 같은 짧은 반응",
+  },
 ];
 
 export type CategoryId =
@@ -48,23 +60,25 @@ export const AXES = [
 ] as const;
 
 export type Classified = {
-  category: CategoryId;
+  group: GroupId;
   reply: boolean;
   urgency: 0 | 1 | 2 | 3;
   terms: boolean;
   termsNote: string;
   reason: string;
-  source: "ai" | "rules";
-  // 1차(그룹) 판정 결과. constrained면 2차 모델은 이 그룹의 소분류만 골랐다.
-  stage?: { group: GroupId; confidence: number; constrained: boolean };
+  // jev: 1차 신뢰도가 기준 이상이라 Jev 판정을 씀, ai: Claude가 분류, rules: 키워드 규칙
+  source: "jev" | "ai" | "rules";
+  // Jev를 거쳤다면 그 판정과 신뢰도. accepted가 false면 Claude가 다시 분류했다.
+  jev?: { group: GroupId; confidence: number; accepted: boolean };
 };
 
 export type ClassifyUsage = {
   model: string;
+  jev: number;
   ai: number;
   rules: number;
-  constrained: number;
   threshold: number;
+  jevInputTokens: number;
   inputTokens: number;
   outputTokens: number;
   costUsd: number | null;
@@ -78,7 +92,9 @@ export type Msg = {
   handle: string;
   ago: string;
   text: string;
-  category: CategoryId;
+  group: GroupId;
+  // 시연 데이터의 정답 소분류. 화면에는 쓰지 않는다.
+  category?: CategoryId;
   reply: boolean;
   urgency: 0 | 1 | 2 | 3;
   terms: boolean;
@@ -86,11 +102,11 @@ export type Msg = {
   termsNote?: string;
   reason: string;
   pasted?: boolean;
-  source?: "ai" | "rules";
-  stage?: Classified["stage"];
+  source?: Classified["source"];
+  jev?: Classified["jev"];
 };
 
-export const DEMO: Msg[] = [
+const RAW: (Omit<Msg, "group"> & { category: CategoryId })[] = [
   {
     id: "m1", name: "글로우랩 마케팅", handle: "glowlab.official", ago: "방금",
     text: "안녕하세요 글로우랩입니다! 신제품 세럼 릴스 1건에 광고비 150만원 제안드리고 싶어요. 11/20 업로드, 2차 활용은 3개월 가능하면 좋겠습니다. 가능하시면 단가표 부탁드려요.",
@@ -194,3 +210,5 @@ export const DEMO: Msg[] = [
     reason: "스토리에 달린 이모지 반응이에요.",
   },
 ];
+
+export const DEMO: Msg[] = RAW.map((m) => ({ ...m, group: CAT[m.category].group }));
