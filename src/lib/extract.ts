@@ -94,11 +94,12 @@ export function extractWithRules(text: string): FormDraft {
 
   const tags = field(text, "해시태그|태그");
   const memo = [r.terms.deletionBan, tags ? `해시태그 ${tags}` : r.terms.disclosure, field(text, "가이드|필수\\s*문구|유의\\s*사항")]
-    .filter(Boolean)
+    .filter((v): v is string => Boolean(v))
+    .map((v) => v.replace(/^[\s\-•·*]+/, ""))
     .join(" / ");
 
   return {
-    brandName: clean(field(text, "브랜드|업체|회사|상호")) ?? introBrand(text) ?? r.terms.brand,
+    brandName: clean(field(text, "브랜드|업체|회사|상호")) ?? introBrand(text) ?? text.match(/[가-힣A-Za-z0-9]+(?:코스메틱스?|뷰티|화장품)/)?.[0] ?? r.terms.brand,
     contact: text.match(/[\w.+-]+@[\w-]+\.[\w.]+/)?.[0] ?? text.match(/01[016789][-\s]?\d{3,4}[-\s]?\d{4}/)?.[0] ?? null,
     product: clean(field(text, "제품|상품|품목")) ?? productWord(text) ?? clean(r.terms.product?.replace(/^(이번에|이번|저희|새로)\s*/, "") ?? null),
     deliverables: anyContent ? d : null,
