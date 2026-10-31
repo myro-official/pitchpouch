@@ -63,7 +63,7 @@ export const IconWon = ({ size = 18 }: P) => (
   </svg>
 );
 export const IconCheck = ({ size = 14 }: P) => (
-  <svg {...base(size)} stroke="#4a1830" strokeWidth={3}>
+  <svg {...base(size)} stroke="currentColor" strokeWidth={3}>
     <path d="M5 12.5l4.5 4.5L19 7.5" />
   </svg>
 );
@@ -74,9 +74,9 @@ export const IconBack = ({ size = 22 }: P) => (
 );
 export const IconEmpty = ({ size = 56 }: P) => (
   <svg width={size} height={size} viewBox="0 0 56 56" fill="none">
-    <rect x="8" y="14" width="40" height="30" rx="8" fill="#FFF0F5" />
-    <path d="M8 30h12l3 5h10l3-5h12" stroke="#B02A62" strokeWidth="2.4" strokeLinejoin="round" />
-    <circle cx="40" cy="14" r="6" fill="#B02A62" />
+    <rect x="8" y="14" width="40" height="30" rx="8" fill="#EEF1F7" />
+    <path d="M8 30h12l3 5h10l3-5h12" stroke="#080F29" strokeWidth="2.4" strokeLinejoin="round" />
+    <circle cx="40" cy="14" r="6" fill="#080F29" />
   </svg>
 );
 export const IconBell = ({ size = 22 }: P) => (

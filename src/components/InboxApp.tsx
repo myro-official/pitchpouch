@@ -79,7 +79,8 @@ function Pills({ m }: { m: Msg }) {
 export function InboxApp() {
   const [tab, setTab] = useState<Tab>("inbox");
   const [filter, setFilter] = useState<Filter>("all");
-  const [junkOpen, setJunkOpen] = useState(false);
+  // 전체 보기에서 접어 둔 그룹. 스팸은 처음부터 접혀 있다.
+  const [folded, setFolded] = useState<Set<GroupId>>(() => new Set<GroupId>(["junk"]));
   const [openId, setOpenId] = useState<string | null>(null);
   const [overrides, setOverrides] = useState<Record<string, GroupId>>({});
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
@@ -287,8 +288,8 @@ export function InboxApp() {
 
           {shown.map((g) => {
             const list = visible(g.id);
-            const collapsed = filter === "all" && g.id === "junk" && !junkOpen;
-            const lim = limits[g.id] ?? (filter === "all" ? 8 : 30);
+            const collapsed = filter === "all" && folded.has(g.id);
+            const lim = limits[g.id] ?? (filter === "all" ? 5 : 30);
             return (
               <div key={g.id}>
                 <div className="title-row">
@@ -296,9 +297,20 @@ export function InboxApp() {
                     {g.label}
                     <span>{list.length}</span>
                   </p>
-                  {filter === "all" && g.id === "junk" && (
-                    <button className="link-btn" style={{ marginTop: 18 }} onClick={() => setJunkOpen(!junkOpen)}>
-                      {junkOpen ? "접기" : "펼치기"}
+                  {filter === "all" && (
+                    <button
+                      className="link-btn"
+                      style={{ marginTop: 18 }}
+                      aria-expanded={!collapsed}
+                      onClick={() =>
+                        setFolded((f) => {
+                          const next = new Set(f);
+                          if (!next.delete(g.id)) next.add(g.id);
+                          return next;
+                        })
+                      }
+                    >
+                      {collapsed ? "펼치기" : "접기"}
                     </button>
                   )}
                 </div>
@@ -313,8 +325,8 @@ export function InboxApp() {
                       list.slice(0, lim).map((m) => <Row key={m.id} m={m} />)
                     )}
                     {list.length > lim && (
-                      <button className="btn ghost sm more" onClick={() => setLimits({ ...limits, [g.id]: lim + 30 })}>
-                        {list.length - lim}개 더 보기
+                      <button className="link-btn more" onClick={() => setLimits({ ...limits, [g.id]: lim + 30 })}>
+                        더보기
                       </button>
                     )}
                   </div>
