@@ -115,3 +115,10 @@ export function findConflicts(list: Proposal[]) {
 export function emptyMeta(): ProposalMeta {
   return { category: null, uploadDate: null, uploadTime: null, minUse: null, exclusivity: null };
 }
+
+// 받침 유무로 을/를을 고른다. "광고 표기" → "광고 표기를"
+export function eulReul(word: string) {
+  const c = word.trim().slice(-1).charCodeAt(0);
+  if (c < 0xac00 || c > 0xd7a3) return `${word}을(를)`;
+  return (c - 0xac00) % 28 ? `${word}을` : `${word}를`;
+}

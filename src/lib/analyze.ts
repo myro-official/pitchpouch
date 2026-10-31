@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
+import { eulReul } from "./meta";
 import { estimatePrice } from "./pricing";
 import type { Analysis, Creator, Deliverables, Missing, Risk, Terms } from "./types";
 
@@ -157,7 +158,7 @@ export function analyzeWithRules(text: string): Draft {
     risks,
     replies: {
       askMissing: missing.length
-        ? `안녕하세요, 제안 감사합니다! 진행 전에 ${missingList}을(를) 알려 주시면 검토 후 바로 답드릴게요.`
+        ? `안녕하세요, 제안 감사합니다! 진행 전에 ${eulReul(missingList)} 알려 주시면 검토 후 바로 답드릴게요.`
         : "",
       requestChanges: risks.length
         ? `제안 감사합니다. 진행하고 싶은데 몇 가지만 조정 부탁드려요. ${risks.map((r) => r.ask).join(" ")}`

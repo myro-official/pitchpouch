@@ -57,7 +57,7 @@ export async function POST(request: Request) {
   const analysis = await analyzeProposal(text, creator);
   if (analysis.engine === "rules" && body.source === "paste") {
     const x = extractWithRules(text);
-    patchTerms(analysis.terms, x);
+    patchTerms(analysis, x);
     analysis.summary = `${analysis.terms.brand ?? "브랜드"}의 ${analysis.terms.product ?? "제품"} 협찬 제안${analysis.budgetWon === null ? " (원고료 미기재)" : ""}`;
   }
   const now = new Date().toISOString();

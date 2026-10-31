@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { type Conflict, findConflicts } from "@/lib/meta";
+import { type Conflict, eulReul, findConflicts } from "@/lib/meta";
 import type { Creator, Proposal } from "@/lib/types";
 import { AnalysisCard } from "./AnalysisCard";
 import { IconBack, IconBell, IconCheck, IconInbox, IconLink, IconPaste, IconShield } from "./icons";
@@ -178,6 +178,7 @@ export function CreatorApp() {
 
       {open ? (
         <Detail
+          key={open.id}
           proposal={open}
           conflicts={conflicts.get(open.id) ?? []}
           onBack={goHome}
@@ -427,11 +428,11 @@ function Detail({
   const options = useMemo(
     () => [
       ...(a?.risks.map((r) => r.ask) ?? []),
-      ...(a?.missing.map((m) => `${m.item}을(를) 알려 주세요.`) ?? []),
+      ...(a?.missing.map((m) => `${eulReul(m.item)} 알려 주세요.`) ?? []),
     ],
     [a],
   );
-  const [picked, setPicked] = useState<string[]>(options.slice(0, 3));
+  const [picked, setPicked] = useState<string[]>(options);
   const [busy, setBusy] = useState(false);
 
   const act = async (body: object, msg: string) => {
@@ -450,7 +451,12 @@ function Detail({
   };
 
   const s = STATUS[p.status];
-  const canCounter = p.source === "link" && ["new", "brand_revised"].includes(p.status);
+  const isLink = p.source === "link";
+  const canAct = ["new", "brand_revised"].includes(p.status);
+  // 붙여넣은 제안은 고른 항목으로 답장 문구를 만들어 복사한다.
+  const draft = picked.length
+    ? `안녕하세요, 제안 감사합니다! 진행 전에 몇 가지 확인 부탁드려요.\n${picked.map((x) => `- ${x}`).join("\n")}`
+    : (a?.replies.accept ?? "");
 
   return (
     <>
@@ -480,26 +486,55 @@ function Detail({
 
       {a && <AnalysisCard analysis={a} onCopy={onCopy} />}
 
-      {canCounter && options.length > 0 && (
+      {canAct && (
         <section className="sec">
           <h2 className="sec-title">브랜드에 수정 요청</h2>
-          <p className="lead">보낼 항목을 고르면 브랜드가 같은 링크에서 답해요.</p>
+          {options.length === 0 ? (
+            <p className="lead">고칠 조건이 없어요. 그대로 수락해도 괜찮아요.</p>
+          ) : (
+            <>
+              <p className="lead">
+                {isLink ? "고른 항목을 보내면 브랜드가 같은 링크에서 답해요." : "고른 항목으로 답장 문구를 만들어요. 복사해서 DM으로 보내 주세요."}
+              </p>
+              <div style={{ marginTop: 8 }}>
+                {options.map((o) => {
+                  const on = picked.includes(o);
+                  return (
+                    <button key={o} className={`check ${on ? "on" : ""}`} onClick={() => setPicked(on ? picked.filter((x) => x !== o) : [...picked, o])}>
+                      <span className="box">{on && <IconCheck />}</span>
+                      <span>{o}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {!isLink && (
+                <>
+                  <div className="reply">{draft}</div>
+                  <button className="btn ghost sm" style={{ marginTop: 10 }} onClick={() => onCopy(draft)}>
+                    답장 복사
+                  </button>
+                </>
+              )}
+            </>
+          )}
+        </section>
+      )}
+
+      {p.counter && !canAct && (
+        <section className="sec">
+          <h2 className="sec-title">보낸 수정 요청</h2>
           <div style={{ marginTop: 8 }}>
-            {options.map((o) => {
-              const on = picked.includes(o);
-              return (
-                <button key={o} className={`check ${on ? "on" : ""}`} onClick={() => setPicked(on ? picked.filter((x) => x !== o) : [...picked, o])}>
-                  <span className="box">{on && <IconCheck />}</span>
-                  <span>{o}</span>
-                </button>
-              );
-            })}
+            {p.counter.items.map((it) => (
+              <div className="pt" key={it}>
+                <b>{it}</b>
+              </div>
+            ))}
           </div>
         </section>
       )}
 
       <div className="cta">
-        {canCounter ? (
+        {canAct && isLink ? (
           <>
             <button className="btn ghost" disabled={busy} onClick={() => act({ action: "accept" }, "수락했어요")}>
               그대로 수락
@@ -507,12 +542,13 @@ function Detail({
             <button
               className="btn"
               disabled={busy || picked.length === 0}
+              hidden={options.length === 0}
               onClick={() => act({ action: "counter", items: picked, message: a?.replies.requestChanges ?? "" }, "수정 요청을 보냈어요")}
             >
               수정 요청 보내기
             </button>
           </>
-        ) : p.source === "paste" && p.status === "new" ? (
+        ) : canAct ? (
           <>
             <button className="btn ghost" disabled={busy} onClick={() => act({ action: "reject" }, "거절로 정리했어요")}>
               거절

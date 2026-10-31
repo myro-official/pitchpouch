@@ -70,7 +70,7 @@ export function ensureDemo(creator: Creator) {
     if (getProposal(id)) return;
     const x = extractWithRules(s.text);
     const draft = analyzeWithRules(s.text);
-    patchTerms(draft.terms, x);
+    patchTerms(draft, x);
     draft.summary = `${draft.terms.brand}의 ${draft.terms.product ?? "제품"} 협찬 제안${draft.budgetWon === null ? " (원고료 미기재)" : ""}`;
     const at = new Date(Date.now() - s.hoursAgo * 3600_000).toISOString();
     addProposal({

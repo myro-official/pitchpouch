@@ -168,8 +168,17 @@ function productWord(t: string) {
 }
 
 // 규칙 분석이 놓친 브랜드·제품·2차 활용을 양식 추출 결과로 채운다.
-export function patchTerms(terms: { brand: string | null; product: string | null; usageRights: string | null }, x: FormDraft) {
-  terms.brand = x.brandName ?? terms.brand;
-  terms.product = x.product ?? terms.product;
-  if (!terms.usageRights && x.usage && x.usage !== "없음") terms.usageRights = `광고 소재 활용 (${x.usage})`;
+export function patchTerms(d: Pick<ReturnType<typeof analyzeWithRules>, "terms" | "missing" | "risks">, x: FormDraft) {
+  d.terms.brand = x.brandName ?? d.terms.brand;
+  d.terms.product = x.product ?? d.terms.product;
+  if (!d.terms.usageRights && x.usage && x.usage !== "없음") {
+    d.terms.usageRights = `광고 소재 활용 (${x.usage})`;
+    d.missing = d.missing.filter((m) => m.item !== "2차 활용 여부");
+    d.risks.unshift({
+      clause: d.terms.usageRights,
+      level: x.usage === "기간 제한 없음" ? "high" : "medium",
+      why: x.usage === "기간 제한 없음" ? "기간 제한 없이 내 콘텐츠가 광고로 쓰일 수 있어요." : "내 콘텐츠가 브랜드 광고로 쓰일 수 있어요.",
+      ask: "2차 활용 기간을 3개월로 정하고, 활용 비용을 따로 협의하고 싶어요.",
+    });
+  }
 }
