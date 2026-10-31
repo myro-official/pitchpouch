@@ -58,13 +58,6 @@ const short = (d: string) => (d ? `${Number(d.slice(5, 7))}/${Number(d.slice(8, 
 const rangeLabel = (r: Range) =>
   r.preset === "custom" ? `${short(r.from) || "처음"} ~ ${short(r.to) || "오늘"}` : PRESETS[r.preset];
 
-const URGENCY = ["여유", "며칠 안에", "이번 주", "오늘 안에"];
-const GROUP_LINE: Record<GroupId, string> = {
-  gain: "조건을 보고 수락 여부를 정하는 제안이에요.",
-  rel: "사람과 이어지는 연락이에요.",
-  todo: "직접 확인하고 답해 줘야 하는 일이에요.",
-  junk: "답하지 않아도 되는 메시지예요.",
-};
 
 // 개발자 모드: 분류 근거, 사용량 안내, DM 직접 분류 도구를 보여 준다. 저장이 막힌 브라우저에서도 이번 방문 동안은 동작한다.
 const DEV_KEY = "pitchpouch_dev";
@@ -258,9 +251,6 @@ export function InboxApp() {
   const today = ymd(now);
   const inPeriod = msgs.filter((m) => inRange(m, range, now));
   const unreadN = inPeriod.filter((m) => !m.read).length;
-  const needReply = inPeriod.filter((m) => m.reply).length;
-  const urgent = inPeriod.filter((m) => m.urgency >= 2).length;
-  const withTerms = inPeriod.filter((m) => m.terms).length;
   const scoped = inPeriod.filter((m) => (status === "unread" ? !m.read : true));
   const inGroup = (g: GroupId) => scoped.filter((m) => m.group === g);
   const visible = (g: GroupId) => inGroup(g).sort(sorter(sort));
@@ -360,21 +350,6 @@ export function InboxApp() {
               {usage.costUsd !== null && usage.ai > 0 && ` · 약 $${usage.costUsd.toFixed(5)}`}
             </div>
           )}
-
-          <div className="stat-row">
-            <div className="stat">
-              <b>{needReply}</b>
-              <small>답장할 것</small>
-            </div>
-            <div className="stat hot">
-              <b>{urgent}</b>
-              <small>급한 것</small>
-            </div>
-            <div className="stat">
-              <b>{withTerms}</b>
-              <small>조건 적힘</small>
-            </div>
-          </div>
 
           <div className="filters">
             <div className="chips scroll">
@@ -609,25 +584,10 @@ function Detail({
         )}
       </section>
 
-      <section className="sec">
-        <h2 className="sec-title">한눈에 보기</h2>
-        <p className="lead">{GROUP_LINE[m.group]}</p>
-        <div className="stat-row">
-          <div className="stat">
-            <b>{m.reply ? "필요" : "불필요"}</b>
-            <small>답장</small>
-          </div>
-          <div className={`stat ${m.urgency === 3 ? "hot" : m.urgency === 2 ? "mid" : ""}`}>
-            <b>{URGENCY[m.urgency]}</b>
-            <small>급한 정도</small>
-          </div>
-          <div className="stat">
-            <b>{m.terms ? "있음" : "없음"}</b>
-            <small>금액·조건</small>
-          </div>
-        </div>
-        {m.termsNote && <div className="note" style={{ marginTop: 12 }}>적힌 조건: {m.termsNote}</div>}
-        {dev && (
+      {(m.termsNote || dev) && (
+        <section className="sec">
+          {m.termsNote && <div className="note">적힌 조건: {m.termsNote}</div>}
+          {dev && (
           <details className="dev">
             <summary>분류 근거 보기</summary>
             <p>{m.reason}</p>
@@ -647,8 +607,9 @@ function Detail({
               </p>
             )}
           </details>
-        )}
-      </section>
+          )}
+        </section>
+      )}
 
       {onSend && <Reply key={m.id} onSend={onSend} />}
 
@@ -739,24 +700,27 @@ function Reply({ onSend }: { onSend: (text: string) => Promise<string | null> })
 
   return (
     <section className="sec">
-      <h2 className="sec-title">답장 보내기</h2>
+      <h2 className="sec-title">답장</h2>
       <textarea
         className="textarea"
         rows={3}
         maxLength={1000}
         aria-label="보낼 메시지"
-        placeholder="인스타 DM으로 바로 보내요"
+        placeholder="답장 내용을 입력해 주세요"
         value={text}
         onChange={(e) => setText(e.target.value)}
         style={{ marginTop: 12, minHeight: 96 }}
       />
+      <p className="caption" style={{ marginTop: 8 }}>
+        보낸 답장은 인스타 DM으로 전송돼요.
+      </p>
       {err && (
         <p className="note warn" role="alert" style={{ marginTop: 12 }}>
           {err}
         </p>
       )}
       <button className="btn" style={{ marginTop: 12 }} disabled={busy || !text.trim()} onClick={send}>
-        {busy ? "보내는 중" : "메시지 보내기"}
+        {busy ? "보내는 중" : "보내기"}
       </button>
     </section>
   );
