@@ -336,7 +336,7 @@ export function InboxApp() {
       <nav className="tabbar">
         {(
           [
-            ["inbox", "받은함", <IconInbox key="i" />],
+            ["inbox", "보관함", <IconInbox key="i" />],
             ["paste", "붙여넣기", <IconPaste key="p" />],
             ["connect", "인스타 연결", <IconLink key="l" />],
           ] as const
@@ -474,7 +474,7 @@ function Detail({
     <>
       <section className="sec" style={{ paddingBottom: 8 }}>
         <button className="link-btn" onClick={onBack} style={{ display: "flex", alignItems: "center", gap: 2, marginLeft: -6 }}>
-          <IconBack size={18} /> 받은함
+          <IconBack size={18} /> 보관함
         </button>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
           <h1 className="page-title" style={{ flex: 1 }}>
