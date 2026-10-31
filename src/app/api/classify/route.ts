@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { classifyDm, costUsd, MODEL } from "@/lib/classify";
+import { CONFIDENCE_THRESHOLD, classifyDm, costUsd, MODEL } from "@/lib/classify";
 import type { ClassifyResponse } from "@/lib/inbox";
 
 const Body = z.object({
@@ -20,9 +20,10 @@ export async function POST(request: Request) {
   const inputTokens = outcomes.reduce((n, o) => n + o.inputTokens, 0);
   const outputTokens = outcomes.reduce((n, o) => n + o.outputTokens, 0);
   const ai = outcomes.filter((o) => o.result.source === "ai").length;
+  const constrained = outcomes.filter((o) => o.result.stage?.constrained).length;
   const body: ClassifyResponse = {
     results: outcomes.map((o, i) => ({ id: messages[i].id, ...o.result })),
-    usage: { model: MODEL, ai, rules: outcomes.length - ai, inputTokens, outputTokens, costUsd: costUsd(inputTokens, outputTokens) },
+    usage: { model: MODEL, ai, rules: outcomes.length - ai, constrained, threshold: CONFIDENCE_THRESHOLD, inputTokens, outputTokens, costUsd: costUsd(inputTokens, outputTokens) },
   };
   return Response.json(body);
 }

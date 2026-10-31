@@ -55,12 +55,16 @@ export type Classified = {
   termsNote: string;
   reason: string;
   source: "ai" | "rules";
+  // 1차(그룹) 판정 결과. constrained면 2차 모델은 이 그룹의 소분류만 골랐다.
+  stage?: { group: GroupId; confidence: number; constrained: boolean };
 };
 
 export type ClassifyUsage = {
   model: string;
   ai: number;
   rules: number;
+  constrained: number;
+  threshold: number;
   inputTokens: number;
   outputTokens: number;
   costUsd: number | null;
@@ -83,6 +87,7 @@ export type Msg = {
   reason: string;
   pasted?: boolean;
   source?: "ai" | "rules";
+  stage?: Classified["stage"];
 };
 
 export const DEMO: Msg[] = [

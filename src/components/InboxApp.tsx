@@ -167,6 +167,7 @@ export function InboxApp() {
               {usage.rules > 0 ? `규칙 ${usage.rules}개` : ""} 분류
               {usage.ai > 0 && ` · 입력 ${usage.inputTokens.toLocaleString()}, 출력 ${usage.outputTokens.toLocaleString()} 토큰`}
               {usage.costUsd !== null && usage.ai > 0 && ` · 약 $${usage.costUsd.toFixed(5)}`}
+              {` · 1차 확신도 ${Math.round(usage.threshold * 100)}% 이상 ${usage.constrained}개`}
             </div>
           )}
 
@@ -365,6 +366,12 @@ function Detail({
         <h2 className="sec-title">이렇게 읽었어요</h2>
         <p className="lead">{m.reason}</p>
         {m.source && <p className="caption">{m.source === "ai" ? "AI가 읽은 결과예요" : "AI를 쓰지 못해 키워드 규칙으로 분류했어요"}</p>}
+        {m.stage && (
+          <p className="caption">
+            1차 그룹 판정: {GROUPS.find((g) => g.id === m.stage!.group)?.label} · 확신도 {Math.round(m.stage.confidence * 100)}%
+            {m.stage.constrained ? " (기준 이상, 그룹 안에서만 소분류)" : " (기준 미만, 16개 전체에서 판단)"}
+          </p>
+        )}
         <div className="stat-row">
           <div className="stat">
             <b>{m.reply ? "예" : "아니오"}</b>
@@ -519,6 +526,7 @@ function Paste({ onDone }: { onDone: (added: Msg[], usage: ClassifyUsage) => voi
           reason: r.reason,
           pasted: true,
           source: r.source,
+          stage: r.stage,
         })),
         data.usage,
       );
