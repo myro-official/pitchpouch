@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   type ClassifyResponse,
   type ClassifyUsage,
@@ -73,6 +73,32 @@ function Pills({ m }: { m: Msg }) {
       {m.terms && <i>조건 있음</i>}
     </div>
   );
+}
+
+// 0에서(값이 바뀌면 지금 값에서) 목표까지 빠르게 올라가는 숫자. 서버와 첫 화면을 맞추려고 0부터 시작한다.
+function CountUp({ value }: { value: number }) {
+  const [shown, setShown] = useState(0);
+  const from = useRef(0);
+  useEffect(() => {
+    const start = from.current;
+    let id = 0;
+    if (start === value || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      from.current = value;
+      id = requestAnimationFrame(() => setShown(value));
+      return () => cancelAnimationFrame(id);
+    }
+    const t0 = performance.now();
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - t0) / 900);
+      const v = Math.round(start + (value - start) * (1 - Math.pow(1 - p, 3)));
+      from.current = v;
+      setShown(v);
+      if (p < 1) id = requestAnimationFrame(tick);
+    };
+    id = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(id);
+  }, [value]);
+  return <span style={{ fontVariantNumeric: "tabular-nums" }}>{shown}</span>;
 }
 
 export function InboxApp() {
@@ -230,11 +256,10 @@ export function InboxApp() {
       ) : tab === "inbox" ? (
         <section className="sec">
           <h1 className="page-title">
-            DM {inPeriod.length}개,
+            DM <CountUp value={inPeriod.length} />개,
             <br />
-            안 읽은 건 {unreadN}개예요
+            안 읽은 건 <CountUp value={unreadN} />개예요
           </h1>
-          <p className="lead">다음에 할 행동으로 나눴어요. 확인하고 바로 채팅방으로 가요.</p>
           {usage && (
             <div className="note" style={{ marginTop: 14 }}>
               방금 Jev {usage.jev}개 · {usage.model.replace("claude-", "")} {usage.ai}개 · 규칙 {usage.rules}개 (Jev 신뢰도 {Math.round(usage.threshold * 100)}% 이상만 Jev 판정)
