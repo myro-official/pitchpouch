@@ -4,7 +4,7 @@ import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState, useS
 import { type GroupId, GROUPS, type Msg } from "@/lib/inbox";
 import { RangeCalendar } from "./RangeCalendar";
 import { createClient } from "@/lib/supabase/client";
-import { IconBack, IconCheck, IconEmpty, IconSettings, IconShield } from "./icons";
+import { IconBack, IconCalendar, IconCheck, IconEmpty, IconSettings, IconShield, IconSort } from "./icons";
 
 type Tab = "inbox" | "settings";
 type Filter = "all" | GroupId;
@@ -14,7 +14,7 @@ type Profile = { name: string; handle: string; picture: string; followers: numbe
 const fmtFollowers = (n: number) => (n >= 10_000 ? `${(n / 10_000).toFixed(1).replace(/\.0$/, "")}만` : n.toLocaleString("ko-KR"));
 
 type Sort = "urgent" | "latest";
-type Status = "all" | "unread";
+type Status = "all" | "unread" | "read";
 type Preset = "all" | "today" | "7d" | "30d" | "custom";
 type Range = { preset: Preset; from: string; to: string };
 
@@ -183,8 +183,7 @@ export function InboxApp() {
 
   const today = ymd(now);
   const inPeriod = msgs.filter((m) => inRange(m, range, now));
-  const unreadN = inPeriod.filter((m) => !m.read).length;
-  const scoped = inPeriod.filter((m) => (status === "unread" ? !m.read : true));
+  const scoped = inPeriod.filter((m) => (status === "all" ? true : status === "read" ? m.read : !m.read));
   const inGroup = (g: GroupId) => scoped.filter((m) => m.group === g);
   const visible = (g: GroupId) => inGroup(g).sort(sorter(sort));
 
@@ -214,7 +213,8 @@ export function InboxApp() {
   ];
   const statuses: [Status, string][] = [
     ["all", "모든 DM"],
-    ["unread", `안 읽음 ${unreadN}`],
+    ["unread", "안 읽음"],
+    ["read", "읽음"],
   ];
 
   const shown = filter === "all" ? GROUPS : GROUPS.filter((g) => g.id === filter);
@@ -266,23 +266,22 @@ export function InboxApp() {
             <h1 className="page-title">보관함</h1>
           )}
           <div className="toolbar">
-            <Menu label="분류" value={filter} options={filters.map(([id, label, n]) => [id, `${label} ${n}`])} onChange={setFilter} />
+            <Menu label="분류" value={filter} options={filters.map(([id, label]) => [id, label])} onChange={setFilter} />
             <Menu label="읽음 상태" value={status} options={statuses} onChange={setStatus} />
             <span style={{ flex: 1 }} />
             <button
-              className="menu-btn"
-              aria-label="기간"
+              className={`tool-icon ${range.preset !== "all" ? "on" : ""}`}
+              aria-label={`기간, 지금은 ${rangeLabel(range)}`}
+              title={rangeLabel(range)}
               onClick={() => {
                 setDraft(range.preset === "custom" ? { from: range.from, to: range.to } : { from: "", to: "" });
                 setPanel("range");
               }}
             >
-              {rangeLabel(range)}
-              <Chevron />
+              <IconCalendar />
             </button>
-            <button className="menu-btn" aria-label="정렬" onClick={() => setPanel("sort")}>
-              {SORTS[sort]}
-              <Chevron />
+            <button className="tool-icon" aria-label={`정렬, 지금은 ${SORTS[sort]}`} title={SORTS[sort]} onClick={() => setPanel("sort")}>
+              <IconSort />
             </button>
           </div>
 
@@ -407,16 +406,14 @@ export function InboxApp() {
         </p>
         <button
           className="btn"
-          style={{ marginTop: 12 }}
+          style={{ marginTop: 12, marginLeft: "auto", display: "flex", width: "auto", padding: "12px 32px" }}
           disabled={!draft.from}
           onClick={() => {
             setRange({ preset: "custom", from: draft.from, to: draft.to || draft.from });
             setPanel(null);
           }}
         >
-          {draft.from
-            ? `이 기간으로 보기 · DM ${msgs.filter((m) => inRange(m, { preset: "custom", from: draft.from, to: draft.to || draft.from }, now)).length}개`
-            : "날짜를 골라 주세요"}
+          선택
         </button>
       </Sheet>
 
@@ -518,7 +515,14 @@ function Menu<T extends string>({ label, value, options, onChange }: { label: st
   return (
     <div className="menu" ref={ref}>
       <button className="menu-btn" aria-label={label} aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen(!open)}>
-        {options.find(([k]) => k === value)?.[1]}
+        {/* 모든 항목을 겹쳐 두고 선택된 것만 보여서, 버튼 폭이 가장 긴 항목에 맞고 목록 폭과 같아진다 */}
+        <span className="menu-label">
+          {options.map(([k, text]) => (
+            <span key={k} className={k === value ? "" : "ghost"} aria-hidden={k !== value}>
+              {text}
+            </span>
+          ))}
+        </span>
         <Chevron />
       </button>
       {open && (
