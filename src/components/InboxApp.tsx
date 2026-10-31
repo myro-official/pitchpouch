@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { type GroupId, GROUPS, type Msg } from "@/lib/inbox";
 import { RangeCalendar } from "./RangeCalendar";
 import { createClient } from "@/lib/supabase/client";
@@ -85,7 +85,7 @@ export function InboxApp() {
   const [overrides, setOverrides] = useState<Record<string, GroupId>>({});
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
   const [sheet, setSheet] = useState(false);
-  const [panel, setPanel] = useState<"range" | "sort" | null>(null);
+  const [panel, setPanel] = useState<"range" | null>(null);
   const [sort, setSort] = useState<Sort>("urgent");
   const [status, setStatus] = useState<Status>("all");
   const [range, setRange] = useState<Range>({ preset: "all", from: "", to: "" });
@@ -104,7 +104,11 @@ export function InboxApp() {
           setAuthed(r.status !== 401);
           return r.ok ? r.json() : { dms: [] };
         })
-        .then((j) => setLive(j.dms ?? []))
+        .then((j) => {
+          const next: Msg[] = j.dms ?? [];
+          // 내용이 같으면 기존 배열을 그대로 둬서 5초마다 화면 전체를 다시 그리지 않는다
+          setLive((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+        })
         .catch(() => {}),
     [],
   );
@@ -286,9 +290,7 @@ export function InboxApp() {
             >
               <IconCalendar />
             </button>
-            <button className="tool-icon" aria-label={`정렬, 지금은 ${SORTS[sort]}`} title={SORTS[sort]} onClick={() => setPanel("sort")}>
-              <IconSort />
-            </button>
+            <Menu label="정렬" value={sort} options={(Object.keys(SORTS) as Sort[]).map((k) => [k, SORTS[k]])} onChange={setSort} icon={<IconSort />} />
           </div>
 
           {shown.map((g) => {
@@ -359,10 +361,7 @@ export function InboxApp() {
                   showToast(`${g.label}(으)로 바꿨어요`);
                 }}
               >
-                <span>
-                  {g.label}
-                  <small className="opt-desc">{g.desc}</small>
-                </span>
+                <span>{g.label}</span>
                 {on && <IconCheck size={18} />}
               </button>
             );
@@ -370,57 +369,38 @@ export function InboxApp() {
         </div>
       </Sheet>
 
-      <Sheet open={panel === "sort"} title="정렬" onClose={() => setPanel(null)}>
-        <div className="sheet-list">
-          {(Object.keys(SORTS) as Sort[]).map((k) => (
-            <button
-              key={k}
-              className={`sheet-opt ${sort === k ? "on" : ""}`}
-              onClick={() => {
-                setSort(k);
-                setPanel(null);
-              }}
-            >
-              <span>
-                {SORTS[k]}
-                <small className="opt-desc">{k === "urgent" ? "급한 정도가 높은 순, 같으면 최신순" : "받은 시각이 가까운 순"}</small>
-              </span>
-              {sort === k && <IconCheck size={18} />}
-            </button>
-          ))}
-        </div>
-      </Sheet>
-
       <Sheet open={panel === "range"} title="기간" onClose={() => setPanel(null)}>
-        <div className="chips" style={{ marginBottom: 12 }}>
-          {(Object.keys(PRESETS) as Exclude<Preset, "custom">[]).map((k) => (
+        <div className="cal-wrap">
+          <div className="presets">
+            {(Object.keys(PRESETS) as Exclude<Preset, "custom">[]).map((k) => (
+              <button
+                key={k}
+                // 날짜를 직접 고르는 중이면 위쪽 선택 표시는 풀어 둔다
+                className={!draft.from && range.preset === k ? "on" : ""}
+                onClick={() => {
+                  setRange({ preset: k, from: "", to: "" });
+                  setPanel(null);
+                }}
+              >
+                {PRESETS[k]}
+              </button>
+            ))}
+          </div>
+          {panel === "range" && <RangeCalendar today={today} from={draft.from} to={draft.to} onChange={(from, to) => setDraft({ from, to })} />}
+          <div className="cal-foot">
+            <span className="caption">{draft.from ? `${short(draft.from)}${draft.to ? ` ~ ${short(draft.to)}` : " 하루"}` : ""}</span>
             <button
-              key={k}
-              className={`chip ${range.preset === k ? "on" : ""}`}
+              className="btn"
+              disabled={!draft.from}
               onClick={() => {
-                setRange({ preset: k, from: "", to: "" });
+                setRange({ preset: "custom", from: draft.from, to: draft.to || draft.from });
                 setPanel(null);
               }}
             >
-              {PRESETS[k]}
+              선택
             </button>
-          ))}
+          </div>
         </div>
-        {panel === "range" && <RangeCalendar today={today} from={draft.from} to={draft.to} onChange={(from, to) => setDraft({ from, to })} />}
-        <p className="caption" style={{ marginTop: 10, minHeight: 18 }}>
-          {draft.from ? `${short(draft.from)}${draft.to ? ` ~ ${short(draft.to)}` : " 하루"}` : ""}
-        </p>
-        <button
-          className="btn"
-          style={{ marginTop: 12, marginLeft: "auto", display: "flex", width: "auto", padding: "12px 32px" }}
-          disabled={!draft.from}
-          onClick={() => {
-            setRange({ preset: "custom", from: draft.from, to: draft.to || draft.from });
-            setPanel(null);
-          }}
-        >
-          선택
-        </button>
       </Sheet>
 
       {toast && <div className="toast">{toast}</div>}
@@ -499,7 +479,19 @@ const Chevron = () => (
 );
 
 // 브라우저 기본 select 대신 앱 스타일로 그린 작은 선택 메뉴. 바깥을 누르거나 Esc로 닫힌다.
-function Menu<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: [T, string][]; onChange: (v: T) => void }) {
+function Menu<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+  icon,
+}: {
+  label: string;
+  value: T;
+  options: [T, string][];
+  onChange: (v: T) => void;
+  icon?: ReactNode; // 있으면 글자 대신 아이콘 버튼으로 열고, 목록은 버튼 오른쪽 끝에 맞춘다
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -517,6 +509,17 @@ function Menu<T extends string>({ label, value, options, onChange }: { label: st
 
   return (
     <div className="menu" ref={ref}>
+      {icon ? (
+        <button
+          className="tool-icon"
+          aria-label={`${label}, 지금은 ${options.find(([k]) => k === value)?.[1]}`}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          {icon}
+        </button>
+      ) : (
       <button className="menu-btn" aria-label={label} aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen(!open)}>
         {/* 모든 항목을 겹쳐 두고 선택된 것만 보여서, 버튼 폭이 가장 긴 항목에 맞고 목록 폭과 같아진다 */}
         <span className="menu-label">
@@ -528,8 +531,9 @@ function Menu<T extends string>({ label, value, options, onChange }: { label: st
         </span>
         <Chevron />
       </button>
+      )}
       {open && (
-        <ul className="menu-list" role="listbox" aria-label={label}>
+        <ul className={`menu-list${icon ? " pop" : ""}`} role="listbox" aria-label={label}>
           {options.map(([k, text]) => (
             <li key={k}>
               <button
@@ -662,12 +666,18 @@ function Login({ onDone }: { onDone: () => void }) {
   );
 }
 
+// 화면 가운데에 띄우는 창. 바깥을 누르거나 Esc로 닫힌다.
 function Sheet({ open, title, onClose, children }: { open: boolean; title: string; onClose: () => void; children: React.ReactNode }) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
   return (
     <div className={`bsheet ${open ? "open" : ""}`}>
       <div className="bsheet-scrim" onClick={onClose} />
-      <div className="bsheet-panel">
-        <div className="bsheet-grab" />
+      <div className="bsheet-panel" role="dialog" aria-modal="true" aria-label={title}>
         <div className="bsheet-head">
           <h2 className="sec-title">{title}</h2>
           <button className="link-btn" onClick={onClose}>
