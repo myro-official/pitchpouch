@@ -32,11 +32,13 @@ const useNow = () =>
     () => DEMO_BASE,
   );
 
-// 받은 날을 달력 날짜로 센다: 오늘, n일 전(6일까지), n주일 전(3주일까지), 그 뒤로 n달 전
+// 24시간 안은 지난 시간으로(방금 전, n분 전, n시간 전), 그 뒤는 달력 날짜로 센다: n일 전(6일까지), n주일 전(3주일까지), n달 전
 function ago(min: number, now: number) {
+  if (min < 1) return "방금 전";
+  if (min < 60) return `${Math.floor(min)}분 전`;
+  if (min < 1440) return `${Math.floor(min / 60)}시간 전`;
   const startOf = (t: number) => new Date(t).setHours(0, 0, 0, 0);
   const days = Math.round((startOf(now) - startOf(now - min * 60_000)) / DAY);
-  if (days <= 0) return "오늘";
   if (days < 7) return `${days}일 전`;
   if (days < 28) return `${Math.floor(days / 7)}주일 전`;
   return `${Math.max(1, Math.floor(days / 30))}달 전`;
