@@ -4,7 +4,7 @@ import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef
 import { type GroupId, GROUPS, type Msg } from "@/lib/inbox";
 import { RangeCalendar } from "./RangeCalendar";
 import { createClient } from "@/lib/supabase/client";
-import { IconBack, IconCalendar, IconCheck, IconEmpty, IconSettings, IconShield, IconSort } from "./icons";
+import { IconBack, IconCalendar, IconCheck, IconEmpty, IconLogo, IconSettings, IconSort } from "./icons";
 
 type Tab = "inbox" | "settings";
 type Filter = "all" | GroupId;
@@ -221,7 +221,7 @@ export function InboxApp() {
       <header className="top">
         <button className="brand home-btn" onClick={goHome} aria-label="홈으로">
           <span className="brand-mark" style={{ color: "var(--on-brand)" }}>
-            <IconShield />
+            <IconLogo />
           </span>
           PitchPouch
         </button>

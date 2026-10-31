@@ -11,10 +11,11 @@ const base = (size: number) => ({
   strokeLinejoin: "round" as const,
 });
 
-export const IconShield = ({ size = 16 }: P) => (
+export const IconLogo = ({ size = 16 }: P) => (
   <svg {...base(size)}>
-    <path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3z" />
-    <path d="M9 12l2 2 4-4" />
+    <path d="M8.5 9h-3l-2 5v4.5A1.5 1.5 0 005 20h14a1.5 1.5 0 001.5-1.5V14l-2-5h-3" />
+    <path d="M3.5 14h4l1.5 2.5h6l1.5-2.5h4" />
+    <path d="M12 3.5l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9z" />
   </svg>
 );
 export const IconInbox = ({ size = 22 }: P) => (
