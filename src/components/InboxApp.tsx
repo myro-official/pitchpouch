@@ -9,9 +9,9 @@ import {
   GROUPS,
   type Msg,
 } from "@/lib/inbox";
-import { IconBack, IconChat, IconCheck, IconEmpty, IconInbox, IconLink, IconPaste, IconShield } from "./icons";
+import { IconBack, IconChat, IconCheck, IconEmpty, IconInbox, IconSettings, IconShield } from "./icons";
 
-type Tab = "inbox" | "paste" | "connect";
+type Tab = "inbox" | "settings";
 type Filter = "all" | GroupId;
 
 const ME = { handle: "beauty.min", followers: "7.2만" };
@@ -66,6 +66,35 @@ const GROUP_LINE: Record<GroupId, string> = {
   junk: "답하지 않아도 되는 메시지예요.",
 };
 
+// 개발자 모드: 분류 근거, 사용량 안내, DM 직접 분류 도구를 보여 준다. 저장이 막힌 브라우저에서도 이번 방문 동안은 동작한다.
+const DEV_KEY = "pitchpouch_dev";
+const DEV_EVENT = "pitchpouch-dev";
+let devMemory: boolean | null = null;
+function readDev() {
+  if (devMemory !== null) return devMemory;
+  try {
+    return localStorage.getItem(DEV_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+function setDev(on: boolean) {
+  devMemory = on;
+  try {
+    localStorage.setItem(DEV_KEY, on ? "1" : "0");
+  } catch {}
+  window.dispatchEvent(new Event(DEV_EVENT));
+}
+function subscribeDev(cb: () => void) {
+  window.addEventListener(DEV_EVENT, cb);
+  window.addEventListener("storage", cb);
+  return () => {
+    window.removeEventListener(DEV_EVENT, cb);
+    window.removeEventListener("storage", cb);
+  };
+}
+const useDev = () => useSyncExternalStore(subscribeDev, readDev, () => false);
+
 const groupClass = (id: GroupId) => `c-${GROUPS.find((g) => g.id === id)?.tone || "none"}`;
 
 // 급한 순은 같은 급함 안에서 최신순, 최신순은 받은 시각만 본다
@@ -117,6 +146,8 @@ export function InboxApp() {
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
   const [sheet, setSheet] = useState(false);
   const [panel, setPanel] = useState<"range" | "sort" | null>(null);
+  const [settingsView, setSettingsView] = useState<"main" | "paste">("main");
+  const dev = useDev();
   const [sort, setSort] = useState<Sort>("urgent");
   const [status, setStatus] = useState<Status>("all");
   const [range, setRange] = useState<Range>({ preset: "all", from: "", to: "" });
@@ -166,6 +197,7 @@ export function InboxApp() {
   const addPasted = (added: Msg[], u: ClassifyUsage) => {
     setExtra([...added, ...extra]);
     setUsage(u);
+    setSettingsView("main");
     setTab("inbox");
     setFilter("all");
     showToast(`${added.length}개를 분류했어요`);
@@ -242,6 +274,7 @@ export function InboxApp() {
           shown={open.group !== "junk" || revealed.has(open.id)}
           onReveal={() => setRevealed(new Set([...revealed, open.id]))}
           now={now}
+          dev={dev}
           onBack={() => history.back()}
           onChange={() => setSheet(true)}
           onGo={() => goChat(open)}
@@ -253,7 +286,7 @@ export function InboxApp() {
             <br />
             안 읽은 건 <CountUp value={unreadN} />개예요
           </h1>
-          {usage && (
+          {dev && usage && (
             <div className="note" style={{ marginTop: 14 }}>
               방금 Jev {usage.jev}개 · {usage.model.replace("claude-", "")} {usage.ai}개 · 규칙 {usage.rules}개 (Jev 신뢰도 {Math.round(usage.threshold * 100)}% 이상만 Jev 판정)
               {usage.jevInputTokens > 0 && ` · Jev 입력 ${usage.jevInputTokens.toLocaleString()}토큰(약 $${usage.jevCostUsd.toFixed(5)})`}
@@ -345,18 +378,32 @@ export function InboxApp() {
             );
           })}
         </section>
-      ) : tab === "paste" ? (
-        <Paste onDone={addPasted} />
+      ) : settingsView === "paste" ? (
+        <>
+          <section className="sec" style={{ paddingBottom: 0 }}>
+            <button className="link-btn" onClick={() => setSettingsView("main")} style={{ display: "flex", alignItems: "center", gap: 2, marginLeft: -6 }}>
+              <IconBack size={18} /> 설정
+            </button>
+          </section>
+          <Paste onDone={addPasted} />
+        </>
       ) : (
-        <Connect connected={connected} linking={linking} onLink={link} onUnlink={() => setConnected(false)} />
+        <Settings
+          connected={connected}
+          linking={linking}
+          onLink={link}
+          onUnlink={() => setConnected(false)}
+          dev={dev}
+          onDev={setDev}
+          onPaste={() => setSettingsView("paste")}
+        />
       )}
 
       <nav className="tabbar">
         {(
           [
             ["inbox", "보관함", <IconInbox key="i" />],
-            ["paste", "붙여넣기", <IconPaste key="p" />],
-            ["connect", "인스타 연결", <IconLink key="l" />],
+            ["settings", "설정", <IconSettings key="s" />],
           ] as const
         ).map(([key, label, icon]) => (
           <button
@@ -364,6 +411,7 @@ export function InboxApp() {
             className={tab === key && !open ? "on" : ""}
             onClick={() => {
               goHome();
+              setSettingsView("main");
               setTab(key);
               window.scrollTo({ top: 0 });
             }}
@@ -473,6 +521,7 @@ function Detail({
   shown,
   onReveal,
   now,
+  dev,
   onBack,
   onChange,
   onGo,
@@ -481,6 +530,7 @@ function Detail({
   shown: boolean;
   onReveal: () => void;
   now: number;
+  dev: boolean;
   onBack: () => void;
   onChange: () => void;
   onGo: () => void;
@@ -534,25 +584,27 @@ function Detail({
           </div>
         </div>
         {m.termsNote && <div className="note" style={{ marginTop: 12 }}>적힌 조건: {m.termsNote}</div>}
-        <details className="dev">
-          <summary>분류 근거 보기</summary>
-          <p>{m.reason}</p>
-          {m.source && (
-            <p>{m.source === "jev" ? "Jev가 분류했어요" : m.source === "ai" ? "Claude가 분류했어요" : "AI를 쓰지 못해 키워드 규칙으로 분류했어요"}</p>
-          )}
-          {m.jev && (
-            <p>
-              Jev 판정: {m.jev.group === "unclear" ? "애매함" : GROUPS.find((x) => x.id === m.jev!.group)?.label} · 신뢰도 {Math.round(m.jev.confidence * 100)}%
-              {m.jev.accepted
-                ? " (기준 이상, Jev 판정 사용)"
-                : m.jev.why === "unclear"
-                  ? " (애매함으로 판정, Claude가 다시 분류)"
-                  : m.jev.why === "risk" || m.jev.why === "veto"
-                    ? " (사기 신호 감지, Claude가 다시 분류)"
-                    : " (기준 미만, Claude가 다시 분류)"}
-            </p>
-          )}
-        </details>
+        {dev && (
+          <details className="dev">
+            <summary>분류 근거 보기</summary>
+            <p>{m.reason}</p>
+            {m.source && (
+              <p>{m.source === "jev" ? "Jev가 분류했어요" : m.source === "ai" ? "Claude가 분류했어요" : "AI를 쓰지 못해 키워드 규칙으로 분류했어요"}</p>
+            )}
+            {m.jev && (
+              <p>
+                Jev 판정: {m.jev.group === "unclear" ? "애매함" : GROUPS.find((x) => x.id === m.jev!.group)?.label} · 신뢰도 {Math.round(m.jev.confidence * 100)}%
+                {m.jev.accepted
+                  ? " (기준 이상, Jev 판정 사용)"
+                  : m.jev.why === "unclear"
+                    ? " (애매함으로 판정, Claude가 다시 분류)"
+                    : m.jev.why === "risk" || m.jev.why === "veto"
+                      ? " (사기 신호 감지, Claude가 다시 분류)"
+                      : " (기준 미만, Claude가 다시 분류)"}
+              </p>
+            )}
+          </details>
+        )}
       </section>
 
       <div className="cta">
@@ -563,6 +615,54 @@ function Detail({
           <IconChat size={18} /> 채팅방으로 이동
         </button>
       </div>
+    </>
+  );
+}
+
+function Settings({
+  connected,
+  linking,
+  onLink,
+  onUnlink,
+  dev,
+  onDev,
+  onPaste,
+}: {
+  connected: boolean;
+  linking: boolean;
+  onLink: () => void;
+  onUnlink: () => void;
+  dev: boolean;
+  onDev: (on: boolean) => void;
+  onPaste: () => void;
+}) {
+  return (
+    <>
+      <section className="sec" style={{ paddingBottom: 0 }}>
+        <h1 className="page-title">설정</h1>
+      </section>
+      <Connect connected={connected} linking={linking} onLink={onLink} onUnlink={onUnlink} />
+      <section className="sec">
+        <h2 className="sec-title">개발자 모드</h2>
+        <p className="lead">DM이 어떻게 분류되는지 확인하는 도구를 켜요.</p>
+        <div className="group-row">
+          <button className={`switch ${dev ? "on" : ""}`} onClick={() => onDev(!dev)} aria-label="개발자 모드">
+            <i />
+          </button>
+          {dev ? "켜짐" : "꺼짐"}
+        </div>
+        {dev && (
+          <>
+            <button className="btn ghost" style={{ marginTop: 16 }} onClick={onPaste}>
+              DM 직접 분류해 보기
+            </button>
+            <div className="pt" style={{ marginTop: 12 }}>
+              <b>켜면 달라지는 것</b>
+              <p>DM 상세 화면에 분류 근거(Jev 판정, 신뢰도, 판정 경로)가 보이고, 직접 분류한 뒤에는 사용량과 비용 안내가 떠요.</p>
+            </div>
+          </>
+        )}
+      </section>
     </>
   );
 }
@@ -580,7 +680,7 @@ function Connect({
 }) {
   return (
     <section className="sec">
-      <h1 className="page-title">인스타 연결</h1>
+      <h2 className="sec-title">인스타 연결</h2>
       <p className="lead">Meta 계정을 연결하면 DM이 자동으로 들어와 분류돼요.</p>
       <div className="note warn" style={{ marginTop: 14 }}>
         지금은 목업 화면이에요. 실제 연동은 Meta 앱 심사를 통과한 뒤 열려요.

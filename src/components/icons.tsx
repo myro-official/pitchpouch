@@ -85,3 +85,10 @@ export const IconBell = ({ size = 22 }: P) => (
     <path d="M10 20.5a2 2 0 004 0" />
   </svg>
 );
+export const IconSettings = ({ size = 22 }: P) => (
+  <svg {...base(size)}>
+    <path d="M4 7h9M19 7h1M4 17h1M11 17h9" />
+    <circle cx="16" cy="7" r="2.2" />
+    <circle cx="8" cy="17" r="2.2" />
+  </svg>
+);
