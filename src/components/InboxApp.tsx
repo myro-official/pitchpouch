@@ -9,8 +9,9 @@ import { IconBack, IconCheck, IconEmpty, IconSettings, IconShield } from "./icon
 type Tab = "inbox" | "settings";
 type Filter = "all" | GroupId;
 
-// 인스타를 연결하면 Meta에서 받아올 프로필. 사진이 없으면 이름의 첫 글자를 보여 준다.
-const ME = { name: "뷰티민", handle: "beauty.min", followers: "7.2만", picture: "/profile.jpg" };
+// 연결된 인스타 계정의 프로필(/api/profile). 사진이 없으면 이름의 첫 글자를 보여 준다.
+type Profile = { name: string; handle: string; picture: string; followers: number };
+const fmtFollowers = (n: number) => (n >= 10_000 ? `${(n / 10_000).toFixed(1).replace(/\.0$/, "")}만` : n.toLocaleString("ko-KR"));
 
 type Sort = "urgent" | "latest";
 type Status = "all" | "unread";
@@ -172,9 +173,18 @@ export function InboxApp() {
     const t = setInterval(loadLive, 5000);
     return () => clearInterval(t);
   }, [loadLive]);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  useEffect(() => {
+    if (!authed) return;
+    fetch("/api/profile", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setProfile(j.profile ?? null))
+      .catch(() => {});
+  }, [authed]);
   const logout = async () => {
     await createClient().auth.signOut();
     setLive([]);
+    setProfile(null);
     setAuthed(false);
     setTab("inbox");
   };
@@ -317,20 +327,22 @@ export function InboxApp() {
         <section className="sec">
           {connected ? (
             <>
-              <div className="profile">
-                {ME.picture ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img className="avatar" src={ME.picture} alt="" />
-                ) : (
-                  <span className="avatar">{ME.name.slice(0, 1)}</span>
-                )}
-                <div>
-                  <b>{ME.name}</b>
-                  <small>
-                    @{ME.handle} · 팔로워 {ME.followers}
-                  </small>
+              {profile && (
+                <div className="profile">
+                  {profile.picture ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img className="avatar" src={profile.picture} alt="" />
+                  ) : (
+                    <span className="avatar">{profile.name.slice(0, 1)}</span>
+                  )}
+                  <div>
+                    <b>{profile.name}</b>
+                    <small>
+                      @{profile.handle} · 팔로워 {fmtFollowers(profile.followers)}
+                    </small>
+                  </div>
                 </div>
-              </div>
+              )}
               <p className="counts">
                 DM <CountUp value={inPeriod.length} />개 · 안 읽은 건 <CountUp value={unreadN} />개
               </p>
@@ -445,6 +457,7 @@ export function InboxApp() {
           onPaste={() => setSettingsView("paste")}
           onBack={() => history.back()}
           onLogout={authed ? logout : undefined}
+          handle={profile?.handle}
         />
       )}
 
@@ -582,12 +595,7 @@ function Detail({
             </button>
           </div>
         )}
-      </section>
-
-      {(m.termsNote || dev) && (
-        <section className="sec">
-          {m.termsNote && <div className="note">적힌 조건: {m.termsNote}</div>}
-          {dev && (
+        {dev && (
           <details className="dev">
             <summary>분류 근거 보기</summary>
             <p>{m.reason}</p>
@@ -607,11 +615,9 @@ function Detail({
               </p>
             )}
           </details>
-          )}
-        </section>
-      )}
-
-      {onSend && <Reply key={m.id} onSend={onSend} />}
+        )}
+        {onSend && <Reply key={m.id} onSend={onSend} />}
+      </section>
 
       <div className="cta">
         <button className="btn ghost" onClick={onChange}>
@@ -632,6 +638,7 @@ function Settings({
   onPaste,
   onBack,
   onLogout,
+  handle,
 }: {
   connected: boolean;
   linking: boolean;
@@ -642,6 +649,7 @@ function Settings({
   onPaste: () => void;
   onBack: () => void;
   onLogout?: () => void;
+  handle?: string;
 }) {
   return (
     <>
@@ -651,7 +659,7 @@ function Settings({
         </button>
         <h1 className="page-title" style={{ marginTop: 8 }}>설정</h1>
       </section>
-      <Connect connected={connected} linking={linking} onLink={onLink} onUnlink={onUnlink} />
+      <Connect connected={connected} linking={linking} onLink={onLink} onUnlink={onUnlink} handle={handle} />
       <section className="sec">
         <h2 className="sec-title">개발자 모드</h2>
         <p className="lead">DM이 어떻게 분류되는지 확인하는 도구를 켜요.</p>
@@ -699,7 +707,7 @@ function Reply({ onSend }: { onSend: (text: string) => Promise<string | null> })
   };
 
   return (
-    <section className="sec">
+    <div style={{ marginTop: 28 }}>
       <h2 className="sec-title">답장</h2>
       <textarea
         className="textarea"
@@ -722,7 +730,7 @@ function Reply({ onSend }: { onSend: (text: string) => Promise<string | null> })
       <button className="btn" style={{ marginTop: 12 }} disabled={busy || !text.trim()} onClick={send}>
         {busy ? "보내는 중" : "보내기"}
       </button>
-    </section>
+    </div>
   );
 }
 
@@ -804,11 +812,13 @@ function Connect({
   linking,
   onLink,
   onUnlink,
+  handle,
 }: {
   connected: boolean;
   linking: boolean;
   onLink: () => void;
   onUnlink: () => void;
+  handle?: string;
 }) {
   return (
     <section className="sec">
@@ -818,7 +828,7 @@ function Connect({
         지금은 목업 화면이에요. 실제 연동은 Meta 앱 심사를 통과한 뒤 열려요.
       </div>
       <div className="link-box">
-        <code>{connected ? `@${ME.handle} 연결됨` : "연결된 계정이 없어요"}</code>
+        <code>{connected && handle ? `@${handle} 연결됨` : "연결된 계정이 없어요"}</code>
         {connected && <span className="badge ok">사용 중</span>}
       </div>
       <div className="pt" style={{ marginTop: 12 }}>
