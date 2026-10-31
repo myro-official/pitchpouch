@@ -3,7 +3,7 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { type ClassifyResponse, type ClassifyUsage, type GroupId, GROUPS, type Msg } from "@/lib/inbox";
 import { createClient } from "@/lib/supabase/client";
-import { IconBack, IconChat, IconCheck, IconEmpty, IconInbox, IconSettings, IconShield } from "./icons";
+import { IconBack, IconCheck, IconEmpty, IconInbox, IconSettings, IconShield } from "./icons";
 
 type Tab = "inbox" | "settings";
 type Filter = "all" | GroupId;
@@ -226,12 +226,6 @@ export function InboxApp() {
     if (!history.state?.pp) history.pushState({ pp: 1 }, "");
     window.scrollTo({ top: 0 });
   };
-  // 실제 DM은 인스타 공식 메시지 링크(ig.me)로 보낸 사람과의 대화방을 연다. 아이디를 못 찾았으면 DM 목록을 연다.
-  const goChat = (m: Msg) => {
-    if (m.pasted) return showToast("붙여넣은 DM은 연결된 대화방이 없어요");
-    const url = m.handle ? `https://ig.me/m/${encodeURIComponent(m.handle)}` : "https://www.instagram.com/direct/inbox/";
-    window.open(url, "_blank", "noopener");
-  };
   const addPasted = (added: Msg[], u: ClassifyUsage) => {
     setExtra([...added, ...extra]);
     setUsage(u);
@@ -275,9 +269,6 @@ export function InboxApp() {
           </span>
           <span className="caption">{ago(m.minutesAgo, now)}</span>
         </button>
-        <button className="go" aria-label="채팅방으로 이동" onClick={() => goChat(m)}>
-          <IconChat size={20} />
-        </button>
       </div>
     );
   };
@@ -313,7 +304,6 @@ export function InboxApp() {
           dev={dev}
           onBack={() => history.back()}
           onChange={() => setSheet(true)}
-          onGo={() => goChat(open)}
           onSend={open.senderId ? (text) => sendReply(open, text) : undefined}
         />
       ) : tab === "inbox" && authed === false ? (
@@ -605,7 +595,6 @@ function Detail({
   dev,
   onBack,
   onChange,
-  onGo,
   onSend,
 }: {
   m: Msg;
@@ -615,7 +604,6 @@ function Detail({
   dev: boolean;
   onBack: () => void;
   onChange: () => void;
-  onGo: () => void;
   onSend?: (text: string) => Promise<string | null>;
 }) {
   const g = GROUPS.find((x) => x.id === m.group)!;
@@ -695,9 +683,6 @@ function Detail({
       <div className="cta">
         <button className="btn ghost" onClick={onChange}>
           분류 바꾸기
-        </button>
-        <button className="btn" onClick={onGo}>
-          <IconChat size={18} /> 채팅방으로 이동
         </button>
       </div>
     </>
