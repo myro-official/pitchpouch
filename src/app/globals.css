@@ -293,3 +293,23 @@ p { text-wrap: pretty; }
 .sheet-opt { display: flex; align-items: center; justify-content: space-between; border: 0; background: none; padding: 14px 4px; font-size: 16px; font-weight: 600; text-align: left; color: var(--ink); }
 .sheet-opt + .sheet-opt { border-top: 1px solid var(--line); }
 .sheet-opt.on { color: var(--brand-ink); font-weight: 800; }
+.sort-btn { display: inline-flex; align-items: center; gap: 2px; border: 0; background: none; color: var(--sub); font-size: 14px; font-weight: 700; padding: 6px 2px 6px 8px; border-radius: 8px; transition: background .2s; }
+.sort-btn:active { background: var(--fill); }
+.sort-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* DM 받은함: 분류 pill, 행 이동 버튼 */
+.pills i.c-new { background: var(--brand-weak); color: var(--brand-ink); }
+.pills i.c-ok { background: var(--ok-weak); color: var(--ok); }
+.pills i.c-warn { background: var(--warn-bg); color: var(--warn-ink); }
+.pills i.c-bad { background: var(--danger-weak); color: var(--danger); }
+.item .row-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 14px; border: 0; background: none; padding: 0; text-align: left; }
+.item .row-main .caption { align-self: flex-start; padding-top: 2px; }
+.item .go { flex: 0 0 40px; height: 40px; border: 0; border-radius: 12px; background: var(--brand-weak); color: var(--brand-ink); display: grid; place-items: center; transition: transform .15s; }
+.item .go:active { transform: scale(.92); }
+.badge.pick { border: 0; font: inherit; font-size: 12px; font-weight: 700; }
+.badge.pick.c-new { background: var(--brand-weak); color: var(--brand-ink); }
+.badge.pick.c-ok { background: var(--ok-weak); color: var(--ok); }
+.badge.pick.c-warn { background: var(--warn-bg); color: var(--warn-ink); }
+.badge.pick.c-bad { background: var(--danger-weak); color: var(--danger); }
+.opt-desc { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-top: 2px; }
+.stat-row .stat b { font-size: 22px; }

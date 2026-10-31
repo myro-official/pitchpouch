@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "PitchPouch",
-  description: "협찬 제안을 한 곳에 모으고, 빠진 조건과 불리한 조항을 짚어주는 크리에이터 협찬 비서",
+  description: "쏟아지는 DM을 다음에 할 행동으로 나눠, 돈 되는 제안부터 보여주는 크리에이터 받은함",
 };
 
 export const viewport: Viewport = {

@@ -1,5 +1,5 @@
-import { CreatorApp } from "@/components/CreatorApp";
+import { InboxApp } from "@/components/InboxApp";
 
 export default function Home() {
-  return <CreatorApp />;
+  return <InboxApp />;
 }
