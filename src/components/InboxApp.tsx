@@ -91,8 +91,6 @@ export function InboxApp() {
   const [draft, setDraft] = useState({ from: "", to: "" });
   const [readSet, setReadSet] = useState<Set<string>>(new Set());
   const [limits, setLimits] = useState<Record<string, number>>({});
-  const [connected, setConnected] = useState(true);
-  const [linking, setLinking] = useState(false);
   const [toast, setToast] = useState("");
 
   const [live, setLive] = useState<Msg[]>([]);
@@ -181,13 +179,6 @@ export function InboxApp() {
     if (!history.state?.pp) history.pushState({ pp: 1 }, "");
     window.scrollTo({ top: 0 });
   };
-  const link = () => {
-    setLinking(true);
-    setTimeout(() => {
-      setLinking(false);
-      setConnected(true);
-    }, 900);
-  };
 
   const today = ymd(now);
   const inPeriod = msgs.filter((m) => inRange(m, range, now));
@@ -255,25 +246,21 @@ export function InboxApp() {
         <Login onDone={loadLive} />
       ) : tab === "inbox" ? (
         <section className="sec">
-          {connected ? (
-            <>
-              {profile && (
-                <div className="profile">
-                  {profile.picture ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img className="avatar" src={profile.picture} alt="" />
-                  ) : (
-                    <span className="avatar">{profile.name.slice(0, 1)}</span>
-                  )}
-                  <div>
-                    <b>{profile.name}</b>
-                    <small>
-                      @{profile.handle} · 팔로워 {fmtFollowers(profile.followers)}
-                    </small>
-                  </div>
-                </div>
+          {profile ? (
+            <div className="profile">
+              {profile.picture ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="avatar" src={profile.picture} alt="" />
+              ) : (
+                <span className="avatar">{profile.name.slice(0, 1)}</span>
               )}
-            </>
+              <div>
+                <b>{profile.name}</b>
+                <small>
+                  @{profile.handle} · 팔로워 {fmtFollowers(profile.followers)}
+                </small>
+              </div>
+            </div>
           ) : (
             <h1 className="page-title">보관함</h1>
           )}
@@ -337,15 +324,7 @@ export function InboxApp() {
           })}
         </section>
       ) : (
-        <Settings
-          connected={connected}
-          linking={linking}
-          onLink={link}
-          onUnlink={() => setConnected(false)}
-          onBack={() => history.back()}
-          onLogout={authed ? logout : undefined}
-          handle={profile?.handle}
-        />
+        <Settings onBack={() => history.back()} onLogout={authed ? logout : undefined} />
       )}
 
       <Sheet open={sheet && !!open} title="분류 바꾸기" onClose={() => setSheet(false)}>
@@ -485,40 +464,19 @@ function Detail({
   );
 }
 
-function Settings({
-  connected,
-  linking,
-  onLink,
-  onUnlink,
-  onBack,
-  onLogout,
-  handle,
-}: {
-  connected: boolean;
-  linking: boolean;
-  onLink: () => void;
-  onUnlink: () => void;
-  onBack: () => void;
-  onLogout?: () => void;
-  handle?: string;
-}) {
+function Settings({ onBack, onLogout }: { onBack: () => void; onLogout?: () => void }) {
   return (
-    <>
-      <section className="sec" style={{ paddingBottom: 0 }}>
-        <button className="link-btn" onClick={onBack} style={{ display: "flex", alignItems: "center", gap: 2, marginLeft: -6 }}>
-          <IconBack size={18} /> 보관함
-        </button>
-        <h1 className="page-title" style={{ marginTop: 8 }}>설정</h1>
-      </section>
-      <Connect connected={connected} linking={linking} onLink={onLink} onUnlink={onUnlink} handle={handle} />
+    <section className="sec">
+      <button className="link-btn" onClick={onBack} style={{ display: "flex", alignItems: "center", gap: 2, marginLeft: -6 }}>
+        <IconBack size={18} /> 보관함
+      </button>
+      <h1 className="page-title" style={{ marginTop: 8 }}>설정</h1>
       {onLogout && (
-        <section className="sec">
-          <button className="btn ghost" onClick={onLogout}>
-            로그아웃
-          </button>
-        </section>
+        <button className="btn ghost" style={{ marginTop: 24 }} onClick={onLogout}>
+          로그아웃
+        </button>
       )}
-    </>
+    </section>
   );
 }
 
@@ -681,41 +639,6 @@ function Login({ onDone }: { onDone: () => void }) {
       >
         {signup ? "로그인" : "회원가입"}
       </button>
-    </section>
-  );
-}
-
-function Connect({
-  connected,
-  linking,
-  onLink,
-  onUnlink,
-  handle,
-}: {
-  connected: boolean;
-  linking: boolean;
-  onLink: () => void;
-  onUnlink: () => void;
-  handle?: string;
-}) {
-  return (
-    <section className="sec">
-      <h2 className="sec-title">인스타 연결</h2>
-      <div className="link-box">
-        <code>{connected && handle ? `@${handle} 연결됨` : "연결된 계정이 없어요"}</code>
-        {connected && <span className="badge ok">사용 중</span>}
-      </div>
-      <div style={{ marginTop: 20 }}>
-        {connected ? (
-          <button className="btn ghost" onClick={onUnlink}>
-            연결 해제
-          </button>
-        ) : (
-          <button className="btn" disabled={linking} onClick={onLink}>
-            {linking ? "연결하는 중" : "Meta로 연결하기"}
-          </button>
-        )}
-      </div>
     </section>
   );
 }

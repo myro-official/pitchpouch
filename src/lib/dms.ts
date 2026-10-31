@@ -3,8 +3,8 @@ import type { Msg } from "./inbox";
 import { createAdminClient as db } from "./supabase/admin";
 
 // 실제 인스타 DM 저장소(supabase/migrations의 dms). 서버가 service role로만 읽고 쓴다.
-// 읽음·처리 여부는 화면이 들고 있어서 저장하지 않는다.
-export type DmData = Omit<Msg, "id" | "minutesAgo" | "read" | "done">;
+// 처리 여부는 화면이 들고 있어서 저장하지 않는다. 읽음은 시연용 더미 행에만 미리 적어 둔다.
+export type DmData = Omit<Msg, "id" | "minutesAgo" | "read" | "done"> & { read?: boolean };
 type Row = { id: string; data: DmData; created_at: string };
 
 // 연결된 인스타 계정이 하나라, 실제 DM은 서버가 app_metadata.dm_viewer를 켜 준 계정(테스트 계정, 팀원)만 본다.
@@ -24,13 +24,14 @@ export async function getDm(id: string) {
 }
 
 export async function listDms(): Promise<Msg[]> {
-  const { data, error } = await db().from("dms").select("id, data, created_at").order("created_at", { ascending: false }).limit(50);
+  // shortcut: 최근 500개만 읽는다. 더 쌓이면 화면의 "더 보기"를 서버 페이지 단위로 바꾼다.
+  const { data, error } = await db().from("dms").select("id, data, created_at").order("created_at", { ascending: false }).limit(500);
   if (error) throw new Error(`[dms] ${error.code} ${error.message}`);
   return ((data ?? []) as Row[]).map((r) => ({
     ...r.data,
     id: r.id,
     minutesAgo: Math.floor((Date.now() - new Date(r.created_at).getTime()) / 60000),
-    read: false,
+    read: r.data.read ?? false,
     done: false,
   }));
 }
