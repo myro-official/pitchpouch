@@ -9,7 +9,8 @@ import {
   GROUPS,
   type Msg,
 } from "@/lib/inbox";
-import { IconBack, IconChat, IconCheck, IconEmpty, IconInbox, IconSettings, IconShield } from "./icons";
+import { RangeCalendar } from "./RangeCalendar";
+import { IconBack, IconChat, IconCheck, IconEmpty, IconSettings, IconShield } from "./icons";
 
 type Tab = "inbox" | "settings";
 type Filter = "all" | GroupId;
@@ -194,6 +195,8 @@ export function InboxApp() {
     setOpenId(null);
     setSheet(false);
     setPanel(null);
+    setSettingsView("main");
+    setTab("inbox");
   }, []);
   useEffect(() => {
     window.addEventListener("popstate", goHome);
@@ -203,6 +206,16 @@ export function InboxApp() {
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(""), 1800);
+  };
+  const openSettings = () => {
+    if (tab === "settings" && !openId) return goHome();
+    setOpenId(null);
+    setSheet(false);
+    setPanel(null);
+    setSettingsView("main");
+    setTab("settings");
+    if (!history.state?.pp) history.pushState({ pp: 1 }, "");
+    window.scrollTo({ top: 0 });
   };
   const openMsg = (id: string) => {
     setReadSet((r) => new Set(r).add(id));
@@ -234,7 +247,6 @@ export function InboxApp() {
   const needReply = inPeriod.filter((m) => m.reply).length;
   const urgent = inPeriod.filter((m) => m.urgency >= 2).length;
   const withTerms = inPeriod.filter((m) => m.terms).length;
-  const unreadAll = msgs.filter((m) => !m.read).length;
   const scoped = inPeriod.filter((m) => (status === "unread" ? !m.read : true));
   const inGroup = (g: GroupId) => scoped.filter((m) => m.group === g);
   const visible = (g: GroupId) => inGroup(g).sort(sorter(sort));
@@ -276,11 +288,14 @@ export function InboxApp() {
   return (
     <div className="app">
       <header className="top">
-        <button className="brand home-btn" onClick={() => (goHome(), setTab("inbox"))} aria-label="홈으로">
+        <button className="brand home-btn" onClick={goHome} aria-label="홈으로">
           <span className="brand-mark" style={{ color: "var(--on-brand)" }}>
             <IconShield />
           </span>
           PitchPouch
+        </button>
+        <button className={`icon-btn ${tab === "settings" && !open ? "on" : ""}`} onClick={openSettings} aria-label="설정">
+          <IconSettings size={22} />
         </button>
       </header>
 
@@ -368,7 +383,13 @@ export function InboxApp() {
           </div>
 
           <div className="title-row" style={{ marginTop: 10 }}>
-            <button className="sort-btn" onClick={() => setPanel("range")}>
+            <button
+              className="sort-btn"
+              onClick={() => {
+                setDraft(range.preset === "custom" ? { from: range.from, to: range.to } : { from: "", to: "" });
+                setPanel("range");
+              }}
+            >
               기간 · {rangeLabel(range)} ▾
             </button>
             <button className="sort-btn" onClick={() => setPanel("sort")}>
@@ -434,32 +455,9 @@ export function InboxApp() {
           dev={dev}
           onDev={setDev}
           onPaste={() => setSettingsView("paste")}
+          onBack={() => history.back()}
         />
       )}
-
-      <nav className="tabbar">
-        {(
-          [
-            ["inbox", "보관함", <IconInbox key="i" />],
-            ["settings", "설정", <IconSettings key="s" />],
-          ] as const
-        ).map(([key, label, icon]) => (
-          <button
-            key={key}
-            className={tab === key && !open ? "on" : ""}
-            onClick={() => {
-              goHome();
-              setSettingsView("main");
-              setTab(key);
-              window.scrollTo({ top: 0 });
-            }}
-          >
-            {icon}
-            {label}
-            {key === "inbox" && unreadAll > 0 && <span className="dot">{unreadAll > 99 ? "99+" : unreadAll}</span>}
-          </button>
-        ))}
-      </nav>
 
       <Sheet open={sheet && !!open} title="분류 바꾸기" onClose={() => setSheet(false)}>
         <div className="sheet-list">
@@ -509,62 +507,36 @@ export function InboxApp() {
       </Sheet>
 
       <Sheet open={panel === "range"} title="기간" onClose={() => setPanel(null)}>
-        <div className="sheet-list">
+        <div className="chips" style={{ marginBottom: 12 }}>
           {(Object.keys(PRESETS) as Exclude<Preset, "custom">[]).map((k) => (
             <button
               key={k}
-              className={`sheet-opt ${range.preset === k ? "on" : ""}`}
+              className={`chip ${range.preset === k ? "on" : ""}`}
               onClick={() => {
                 setRange({ preset: k, from: "", to: "" });
                 setPanel(null);
               }}
             >
               {PRESETS[k]}
-              {range.preset === k && <IconCheck size={18} />}
             </button>
           ))}
         </div>
-        <p className="group-title">직접 설정</p>
-        <div className="field row2" style={{ marginTop: 8 }}>
-          <div>
-            <label className="label">시작일</label>
-            <input
-              className="input date"
-              type="date"
-              value={draft.from}
-              max={draft.to && draft.to < today ? draft.to : today}
-              onChange={(e) => {
-                const max = draft.to && draft.to < today ? draft.to : today;
-                setDraft({ ...draft, from: e.target.value > max ? max : e.target.value });
-              }}
-            />
-          </div>
-          <div>
-            <label className="label">종료일</label>
-            <input
-              className="input date"
-              type="date"
-              value={draft.to}
-              min={draft.from || undefined}
-              max={today}
-              onChange={(e) => {
-                const v = e.target.value;
-                setDraft({ ...draft, to: v > today ? today : draft.from && v && v < draft.from ? draft.from : v });
-              }}
-            />
-          </div>
-        </div>
+        {panel === "range" && <RangeCalendar today={today} from={draft.from} to={draft.to} onChange={(from, to) => setDraft({ from, to })} />}
+        <p className="caption" style={{ marginTop: 10, minHeight: 18 }}>
+          {draft.from ? `${short(draft.from)}${draft.to ? ` ~ ${short(draft.to)}` : " 하루"}` : "시작일과 종료일을 차례로 눌러 주세요"}
+        </p>
         <button
           className="btn"
-          style={{ marginTop: 16 }}
-          disabled={!draft.from && !draft.to}
+          style={{ marginTop: 12 }}
+          disabled={!draft.from}
           onClick={() => {
-            const [from, to] = draft.from && draft.to && draft.from > draft.to ? [draft.to, draft.from] : [draft.from, draft.to];
-            setRange({ preset: "custom", from, to });
+            setRange({ preset: "custom", from: draft.from, to: draft.to || draft.from });
             setPanel(null);
           }}
         >
-          이 기간으로 보기
+          {draft.from
+            ? `이 기간으로 보기 · DM ${msgs.filter((m) => inRange(m, { preset: "custom", from: draft.from, to: draft.to || draft.from }, now)).length}개`
+            : "날짜를 골라 주세요"}
         </button>
       </Sheet>
 
@@ -684,6 +656,7 @@ function Settings({
   dev,
   onDev,
   onPaste,
+  onBack,
 }: {
   connected: boolean;
   linking: boolean;
@@ -692,11 +665,15 @@ function Settings({
   dev: boolean;
   onDev: (on: boolean) => void;
   onPaste: () => void;
+  onBack: () => void;
 }) {
   return (
     <>
       <section className="sec" style={{ paddingBottom: 0 }}>
-        <h1 className="page-title">설정</h1>
+        <button className="link-btn" onClick={onBack} style={{ display: "flex", alignItems: "center", gap: 2, marginLeft: -6 }}>
+          <IconBack size={18} /> 보관함
+        </button>
+        <h1 className="page-title" style={{ marginTop: 8 }}>설정</h1>
       </section>
       <Connect connected={connected} linking={linking} onLink={onLink} onUnlink={onUnlink} />
       <section className="sec">
