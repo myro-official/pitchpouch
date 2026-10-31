@@ -32,12 +32,14 @@ const useNow = () =>
     () => DEMO_BASE,
   );
 
+// 받은 날을 달력 날짜로 센다: 오늘, n일 전(6일까지), n주일 전(3주일까지), 그 뒤로 n달 전
 function ago(min: number, now: number) {
-  if (min < 60) return min < 2 ? "방금" : `${min}분 전`;
-  if (min < 1440) return `${Math.floor(min / 60)}시간 전`;
-  if (min < 2880) return "어제";
-  const d = new Date(now - min * 60_000);
-  return `${d.getMonth() + 1}월 ${d.getDate()}일`;
+  const startOf = (t: number) => new Date(t).setHours(0, 0, 0, 0);
+  const days = Math.round((startOf(now) - startOf(now - min * 60_000)) / DAY);
+  if (days <= 0) return "오늘";
+  if (days < 7) return `${days}일 전`;
+  if (days < 28) return `${Math.floor(days / 7)}주일 전`;
+  return `${Math.max(1, Math.floor(days / 30))}달 전`;
 }
 
 function inRange(m: Msg, r: Range, now: number) {
@@ -70,7 +72,6 @@ function Pills({ m }: { m: Msg }) {
   return (
     <div className="pills">
       {m.reply && <i>답장 필요</i>}
-      {m.urgency >= 2 && <i className="warn">{m.urgency === 3 ? "오늘 안에" : "이번 주"}</i>}
       {m.terms && <i>조건 있음</i>}
     </div>
   );
