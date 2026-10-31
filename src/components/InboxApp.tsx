@@ -510,8 +510,14 @@ function Detail({
         )}
         {m.jev && (
           <p className="caption">
-            Jev 판정: {GROUPS.find((x) => x.id === m.jev!.group)?.label} · 신뢰도 {Math.round(m.jev.confidence * 100)}%
-            {m.jev.accepted ? " (기준 이상, Jev 판정 사용)" : " (기준 미만, Claude가 다시 분류)"}
+            Jev 판정: {m.jev.group === "unclear" ? "애매함" : GROUPS.find((x) => x.id === m.jev!.group)?.label} · 신뢰도 {Math.round(m.jev.confidence * 100)}%
+            {m.jev.accepted
+              ? " (기준 이상, Jev 판정 사용)"
+              : m.jev.why === "unclear"
+                ? " (애매함으로 판정, Claude가 다시 분류)"
+                : m.jev.why === "risk" || m.jev.why === "veto"
+                  ? " (사기 신호 감지, Claude가 다시 분류)"
+                  : " (기준 미만, Claude가 다시 분류)"}
           </p>
         )}
         <div className="stat-row">

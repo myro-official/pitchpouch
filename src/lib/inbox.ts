@@ -71,7 +71,15 @@ export type Classified = {
   // jev: 1차 신뢰도가 기준 이상이라 Jev 판정을 씀, ai: Claude가 분류, rules: 키워드 규칙
   source: "jev" | "ai" | "rules";
   // Jev를 거쳤다면 그 판정과 신뢰도. accepted가 false면 Claude가 다시 분류했다.
-  jev?: { group: GroupId; confidence: number; accepted: boolean };
+  jev?: {
+    group: GroupId | "unclear";
+    confidence: number;
+    accepted: boolean;
+    // 채택되지 않은 이유. low는 신뢰도 미만, unclear는 애매함 선택, risk는 Jev의 사기 신호 판정, veto는 위험 키워드
+    why?: "ok" | "low" | "unclear" | "risk" | "veto";
+  };
+  // 확신한 Jev 판정을 표본으로 Claude가 다시 본 결과. disagree면 Claude 판정을 썼다.
+  audit?: { disagree: boolean; jevGroup: GroupId };
 };
 
 export type ClassifyUsage = {
@@ -82,6 +90,9 @@ export type ClassifyUsage = {
   threshold: number;
   jevInputTokens: number;
   jevCostUsd: number;
+  profile: string;
+  audit: number;
+  auditDisagree: number;
   inputTokens: number;
   outputTokens: number;
   costUsd: number | null;
@@ -110,6 +121,7 @@ export type Msg = {
   pasted?: boolean;
   source?: Classified["source"];
   jev?: Classified["jev"];
+  audit?: Classified["audit"];
 };
 
 const RAW: (Omit<Msg, "group" | "read" | "done"> & { category: CategoryId })[] = [

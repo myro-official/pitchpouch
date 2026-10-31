@@ -1,71 +1,65 @@
-// 라벨이 붙은 DM으로 신뢰도 기준별 정확도·비용을 비교한다. 사용: node scripts/eval/run.mjs [서버 주소]
+// 라벨이 붙은 DM으로 분류 방식(v1, v2)을 비교한다.
+// 사용: node scripts/eval/run.mjs [세트 접두사, 기본 dm-labeled] [서버 주소]
+//   예) node scripts/eval/run.mjs dm-new   → 새 평가 데이터만
+//       node scripts/eval/run.mjs dm-      → 모든 세트
 import { readdirSync, readFileSync } from "node:fs";
 
-const BASE = process.argv[2] ?? "https://pitchpouch.vercel.app";
+const PREFIX = process.argv[2] ?? "dm-labeled";
+const BASE = process.argv[3] ?? "https://pitchpouch.vercel.app";
 const dir = new URL("./", import.meta.url);
 const data = readdirSync(dir)
-  .filter((f) => /^dm-labeled.*\.json$/.test(f))
+  .filter((f) => f.startsWith(PREFIX) && f.endsWith(".json"))
   .sort()
   .flatMap((f) => JSON.parse(readFileSync(new URL(f, dir))));
-const LABEL = { gain: "수익 기회", rel: "관계", todo: "처리할 일", junk: "걸러낼 것" };
+const LABEL = { gain: "수익 기회", rel: "관계", todo: "처리할 일", junk: "걸러낼 것", unclear: "애매함" };
 
-async function run(threshold) {
+async function run(profile) {
   const results = [];
   const usage = [];
   for (let i = 0; i < data.length; i += 20) {
     const res = await fetch(`${BASE}/api/classify`, {
       method: "POST",
-      body: JSON.stringify({ threshold, messages: data.slice(i, i + 20).map((d) => ({ id: d.id, text: d.text })) }),
+      // audit 0: 표본 검수가 섞이지 않게 해서 같은 입력이 같은 경로를 타게 한다
+      body: JSON.stringify({ profile, audit: 0, messages: data.slice(i, i + 20).map((d) => ({ id: d.id, text: d.text })) }),
     });
     if (!res.ok) throw new Error(`요청 실패 ${res.status}`);
     const json = await res.json();
     results.push(...json.results);
     usage.push(json.usage);
   }
-  return { results, usage };
+  const by = Object.fromEntries(results.map((r) => [r.id, r]));
+  const rows = data.map((d) => ({ ...d, r: by[d.id] }));
+  return { rows, usage };
 }
 
-// 기준을 1.1로 두면 Claude가 전부 판정하면서 응답에 Jev의 판정과 신뢰도도 같이 남는다. 한 번의 호출로 어떤 기준이든 계산할 수 있다.
-const both = await run(1.1);
-const jevRun = both;
-const claudeRun = both;
-const byId = (r) => Object.fromEntries(r.results.map((x) => [x.id, x]));
-const J = byId(both);
-const C = J;
 const sum = (u, k) => u.reduce((n, x) => n + x[k], 0);
-
-const rows = data.map((d) => ({ ...d, jev: J[d.id].jev?.group ?? null, conf: J[d.id].jev?.confidence ?? null, claude: C[d.id].group, claudeSource: C[d.id].source }));
-const missing = rows.filter((r) => r.conf === null).length;
-const claudeFail = rows.filter((r) => r.claudeSource !== "ai").length;
-if (missing || claudeFail) console.log(`주의: Jev 응답 없음 ${missing}개, Claude 대신 규칙 ${claudeFail}개\n`);
-
-const n = rows.length;
 const pct = (a, b) => (b ? `${((a / b) * 100).toFixed(0)}%` : "-");
-const jevCost = sum(jevRun.usage, "jevCostUsd") / n;
-const claudeCost = sum(claudeRun.usage, "costUsd") / n;
+const n = data.length;
+console.log(`세트 ${PREFIX}*: DM ${n}개 (경계 ${data.filter((d) => d.boundary).length}개, 걸러낼 것 ${data.filter((d) => d.group === "junk").length}개)\n`);
 
-console.log(`DM ${n}개 (경계 사례 ${rows.filter((r) => r.boundary).length}개)`);
-console.log(`Jev만: ${pct(rows.filter((r) => r.jev === r.group).length, n)}, Claude만: ${pct(rows.filter((r) => r.claude === r.group).length, n)}`);
-console.log(`DM당 비용: Jev $${jevCost.toFixed(6)}, Claude $${claudeCost.toFixed(6)}\n`);
-
-console.log("기준  채택 Jev정답  넘김 최종정확도 (명확/경계)       DM당 비용");
-for (const th of [0.5, 0.6, 0.7, 0.8, 0.9, 0.95]) {
-  const fin = rows.map((r) => ({ ...r, final: r.conf >= th ? r.jev : r.claude, acc: r.conf >= th }));
-  const acc = fin.filter((r) => r.acc);
-  const ok = (xs) => xs.filter((r) => r.final === r.group).length;
-  const clear = fin.filter((r) => !r.boundary);
-  const bound = fin.filter((r) => r.boundary);
-  const cost = jevCost + ((n - acc.length) / n) * claudeCost;
-  console.log(
-    `${th.toFixed(2)}  ${String(acc.length).padStart(3)}  ${pct(acc.filter((r) => r.jev === r.group).length, acc.length).padStart(5)}  ${String(n - acc.length).padStart(4)}  ${pct(ok(fin), n).padStart(5)} (${pct(ok(clear), clear.length)}/${pct(ok(bound), bound.length)})  $${cost.toFixed(6)}`,
-  );
-}
-
-console.log("\nJev가 틀린 DM:");
-for (const r of rows.filter((x) => x.jev !== x.group)) {
-  console.log(`#${r.id} 정답 ${LABEL[r.group]} / Jev ${LABEL[r.jev]} ${r.conf} / Claude ${LABEL[r.claude]} ${r.claude === r.group ? "O" : "X"}${r.boundary ? " [경계]" : ""} | ${r.text.slice(0, 40)}`);
-}
-console.log("\nClaude가 틀린 DM:");
-for (const r of rows.filter((x) => x.claude !== x.group)) {
-  console.log(`#${r.id} 정답 ${LABEL[r.group]} / Claude ${LABEL[r.claude]} / Jev ${LABEL[r.jev]} ${r.conf}${r.boundary ? " [경계]" : ""} | ${r.text.slice(0, 40)}`);
+for (const profile of ["v1", "v2"]) {
+  const { rows, usage } = await run(profile);
+  const noAi = rows.filter((x) => x.r.source === "rules").length;
+  if (noAi) console.log(`주의: 규칙 분류 ${noAi}개 — Jev나 Claude가 응답하지 않았어요\n`);
+  const ok = (x) => x.r.group === x.group;
+  const acc = rows.filter((x) => x.r.jev?.accepted);
+  const wrongAcc = acc.filter((x) => !ok(x));
+  const jevOk = rows.filter((x) => x.r.jev && x.r.jev.group === x.group).length;
+  const why = {};
+  for (const x of rows) if (x.r.jev && !x.r.jev.accepted) why[x.r.jev.why] = (why[x.r.jev.why] ?? 0) + 1;
+  const junk = rows.filter((x) => x.group === "junk");
+  const junkMiss = junk.filter((x) => x.r.group !== "junk");
+  const nonJunkAsJunk = rows.filter((x) => x.group !== "junk" && x.r.group === "junk");
+  const claudeIn = sum(usage, "inputTokens");
+  const cost = (sum(usage, "jevCostUsd") + (sum(usage, "costUsd") ?? 0)) / n;
+  console.log(`== ${profile}`);
+  console.log(`최종 정확도 ${pct(rows.filter(ok).length, n)} (${rows.filter(ok).length}/${n}), 명확 ${pct(rows.filter((x) => !x.boundary && ok(x)).length, rows.filter((x) => !x.boundary).length)}, 경계 ${pct(rows.filter((x) => x.boundary && ok(x)).length, rows.filter((x) => x.boundary).length)}`);
+  console.log(`Jev 단독 정확도 ${pct(jevOk, rows.filter((x) => x.r.jev).length)}, Jev가 채택된 ${acc.length}개 중 오답 ${wrongAcc.length}개 (확신한 오류)`);
+  console.log(`Claude로 넘어간 DM ${n - acc.length}개 (${pct(n - acc.length, n)}), 이유 ${JSON.stringify(why)}, DM당 비용 $${cost.toFixed(6)}`);
+  console.log(`걸러낼 것을 놓침 ${junkMiss.length}/${junk.length}, 다른 것을 걸러낼 것으로 오분류 ${nonJunkAsJunk.length}`);
+  for (const x of rows.filter((y) => !ok(y))) {
+    const j = x.r.jev;
+    console.log(`  X ${x.id} 정답 ${LABEL[x.group]} → ${LABEL[x.r.group]} (${x.r.source}) | Jev ${j ? `${LABEL[j.group]} ${j.confidence} ${j.accepted ? "채택" : j.why}` : "없음"} | ${x.text.replace(/\n/g, " ").slice(0, 36)}`);
+  }
+  console.log();
 }
