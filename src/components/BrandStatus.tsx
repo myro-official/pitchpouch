@@ -11,6 +11,27 @@ export function BrandStatus({ id }: { id: string }) {
   const [missing, setMissing] = useState(false);
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
+  const seenKey = `pitchpouch_brand_seen_${id}`;
+  const [seen, setSeen] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(seenKey) ?? "new";
+    } catch {
+      return null;
+    }
+  });
+
+  // 크리에이터 답장이 오면 탭 제목에도 표시한다.
+  const fresh = Boolean(p && seen !== null && p.status !== seen && ["countered", "accepted", "rejected"].includes(p.status));
+  useEffect(() => {
+    document.title = fresh ? "(1) 새 답장 · PitchPouch" : "PitchPouch";
+  }, [fresh]);
+  const markSeen = () => {
+    if (!p) return;
+    setSeen(p.status);
+    try {
+      localStorage.setItem(seenKey, p.status);
+    } catch {}
+  };
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/proposals/${id}`, { cache: "no-store" });
@@ -70,6 +91,12 @@ export function BrandStatus({ id }: { id: string }) {
         </span>
       </header>
       <section className="sec">
+        {fresh && (
+          <button className="note fresh sheet-in" onClick={markSeen}>
+            <b>@{handle}님이 답장했어요</b>
+            <span>확인했어요</span>
+          </button>
+        )}
         <span className={`badge ${s.tone}`}>{s.label}</span>
         <h1 className="page-title" style={{ marginTop: 10 }}>
           {title}

@@ -1,5 +1,6 @@
 import { analyzeProposal } from "@/lib/analyze";
-import { extractWithRules } from "@/lib/extract";
+import { ensureDemo } from "@/lib/demo";
+import { extractWithRules, patchTerms } from "@/lib/extract";
 import { dateLabel, emptyMeta } from "@/lib/meta";
 import { addProposal, getCreator, listProposals, normalizeHandle, saveCreator } from "@/lib/store";
 import type { BrandForm, Creator, Proposal, ProposalMeta } from "@/lib/types";
@@ -9,8 +10,12 @@ type Body =
   | { source: "link"; handle: string; form: BrandForm };
 
 export async function GET(request: Request) {
-  const handle = new URL(request.url).searchParams.get("handle");
+  const params = new URL(request.url).searchParams;
+  const handle = params.get("handle");
   if (!handle) return Response.json({ proposals: [] });
+  if (params.get("demo") === "1") {
+    ensureDemo(getCreator(handle) ?? { handle, name: handle, followers: 12000, avgViews: 8000, category: "뷰티" });
+  }
   return Response.json({ proposals: listProposals(handle) });
 }
 
@@ -28,7 +33,7 @@ export async function POST(request: Request) {
     text = body.text?.trim() ?? "";
     if (text.length < 10) return Response.json({ error: "제안 내용을 조금 더 붙여넣어 주세요." }, { status: 400 });
     const x = extractWithRules(text);
-    meta = { category: x.category, uploadDate: x.uploadDate, minUse: x.minUse, exclusivity: x.exclusivity };
+    meta = { category: x.category, uploadDate: x.uploadDate, uploadTime: null, minUse: x.minUse, exclusivity: x.exclusivity };
     brandName = x.brandName ?? "";
   } else {
     creator = getCreator(body.handle);
@@ -43,6 +48,7 @@ export async function POST(request: Request) {
     meta = {
       category: f.category || null,
       uploadDate: f.uploadDate || null,
+      uploadTime: f.uploadTime || null,
       minUse: f.minUse && f.minUse !== "없음" ? f.minUse : null,
       exclusivity: f.exclusivity?.trim() || null,
     };
@@ -51,8 +57,7 @@ export async function POST(request: Request) {
   const analysis = await analyzeProposal(text, creator);
   if (analysis.engine === "rules" && body.source === "paste") {
     const x = extractWithRules(text);
-    analysis.terms.brand = x.brandName ?? analysis.terms.brand;
-    analysis.terms.product = x.product ?? analysis.terms.product;
+    patchTerms(analysis.terms, x);
     analysis.summary = `${analysis.terms.brand ?? "브랜드"}의 ${analysis.terms.product ?? "제품"} 협찬 제안${analysis.budgetWon === null ? " (원고료 미기재)" : ""}`;
   }
   const now = new Date().toISOString();

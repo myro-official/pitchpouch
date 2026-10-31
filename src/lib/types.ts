@@ -66,6 +66,7 @@ export type CounterOffer = {
 export type ProposalMeta = {
   category: string | null; // "스킨케어 · 마스크팩"
   uploadDate: string | null; // "2026-11-20"
+  uploadTime: string | null; // "18:00" 완료 시각. 아직 화면에는 없고 데이터만 받는다.
   minUse: string | null; // 업로드 전 최소 사용 기간 "2주"
   exclusivity: string | null;
 };
@@ -95,6 +96,7 @@ export type BrandForm = {
   schedule: string;
   category: string;
   uploadDate: string;
+  uploadTime?: string;
   minUse: string;
   usageRights: string;
   exclusivity: string;

@@ -113,5 +113,5 @@ export function findConflicts(list: Proposal[]) {
 }
 
 export function emptyMeta(): ProposalMeta {
-  return { category: null, uploadDate: null, minUse: null, exclusivity: null };
+  return { category: null, uploadDate: null, uploadTime: null, minUse: null, exclusivity: null };
 }

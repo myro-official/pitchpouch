@@ -1,3 +1,4 @@
+import { notifyBrand } from "@/lib/notify";
 import { getCreator, getProposal, updateProposal } from "@/lib/store";
 import type { ProposalStatus } from "@/lib/types";
 
@@ -37,5 +38,8 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/proposals/
         ? { status: status[body.action], brandReply: "reply" in body ? (body.reply ?? null) : null }
         : { status: status[body.action] };
 
-  return Response.json({ proposal: updateProposal(id, patch) });
+  const proposal = updateProposal(id, patch);
+  const notified =
+    proposal && !body.action.startsWith("brand_") ? await notifyBrand(proposal, new URL(request.url).origin) : null;
+  return Response.json({ proposal, notified });
 }

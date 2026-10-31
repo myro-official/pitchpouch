@@ -137,7 +137,7 @@ function pickRevisions(t: string): FormDraft["revisions"] {
 
 // 카테고리·업로드 날짜·최소 사용 기간은 AI와 규칙 모두 같은 방식으로 뽑는다.
 function metaFrom(text: string, product: string | null, schedule: string | null) {
-  const useLine = field(text, "사용\\s*기간|최소\\s*사용|사용\\s*후") ?? text.match(/[^.\n]{0,20}(\d+)\s*(주|일)\s*(이상\s*)?(사용|써)[^.\n]{0,10}/)?.[0] ?? null;
+  const useLine = field(text, "사용\\s*기간|최소\\s*사용|사용\\s*후") ?? text.match(/[^.\n]{0,20}(\d+)\s*(주|일)[^.,\n\d]{0,12}(사용|써|쓰)[^.\n]{0,10}/)?.[0] ?? null;
   return {
     category: detectCategory(`${product ?? ""} ${text}`),
     uploadDate: parseDate(schedule) ?? parseDate(field(text, "업로드|게시")),
@@ -165,4 +165,11 @@ function productWord(t: string) {
   return (
     t.match(/[가-힣A-Za-z0-9]{0,6}\s?(블러셔|치크|틴트|립스틱|쿠션|파운데이션|섀도우|아이섀도|마스카라|마스크팩|수분크림|크림|세럼|앰플|토너|선크림)/)?.[0]?.trim() ?? null
   );
+}
+
+// 규칙 분석이 놓친 브랜드·제품·2차 활용을 양식 추출 결과로 채운다.
+export function patchTerms(terms: { brand: string | null; product: string | null; usageRights: string | null }, x: FormDraft) {
+  terms.brand = x.brandName ?? terms.brand;
+  terms.product = x.product ?? terms.product;
+  if (!terms.usageRights && x.usage && x.usage !== "없음") terms.usageRights = `광고 소재 활용 (${x.usage})`;
 }

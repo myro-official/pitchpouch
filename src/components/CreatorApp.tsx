@@ -1,48 +1,32 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { type Conflict, dateLabel, findConflicts, minUseDays } from "@/lib/meta";
+import { type Conflict, findConflicts } from "@/lib/meta";
 import type { Creator, Proposal } from "@/lib/types";
 import { AnalysisCard } from "./AnalysisCard";
-import { IconBack, IconBell, IconCheck, IconEmpty, IconInbox, IconLink, IconPaste, IconShield } from "./icons";
+import { IconBack, IconBell, IconCheck, IconInbox, IconLink, IconPaste, IconShield } from "./icons";
+import { type Alert, Alerts, buildAlerts, Compare, DONE, Inbox, metaLine } from "./InboxViews";
 import { STATUS } from "./status";
 
 const PROFILE_KEY = "pitchpouch_creator";
-const SEEN_KEY = "pitchpouch_alerts_seen";
+const READ_KEY = "pitchpouch_alerts_read";
+const DEMO_KEY = "pitchpouch_demo";
 type Tab = "inbox" | "alerts" | "paste" | "link";
 // 시연은 유료(PRO) 기준. 무료로 보려면 false.
 const PRO = true;
-const DONE = new Set(["accepted", "rejected", "brand_accepted", "brand_rejected"]);
 
-type Alert = { id: string; at: string; title: string; body: string; tone: "new" | "warn" | "ok" | "bad" };
-
-function buildAlerts(list: Proposal[], conflicts: Map<string, Conflict[]>): Alert[] {
-  const out: Alert[] = [];
-  for (const p of list) {
-    out.push({ id: p.id, at: p.createdAt, title: `${p.brandName}에서 새 제안이 왔어요`, body: p.analysis?.summary ?? "", tone: "new" });
-    if (p.status === "brand_accepted") out.push({ id: p.id, at: p.updatedAt, title: `${p.brandName}가 수정 요청을 받아들였어요`, body: p.brandReply ?? "", tone: "ok" });
-    if (p.status === "brand_rejected") out.push({ id: p.id, at: p.updatedAt, title: `${p.brandName}가 수정 요청을 거절했어요`, body: p.brandReply ?? "", tone: "bad" });
-    if (p.status === "brand_revised") out.push({ id: p.id, at: p.updatedAt, title: `${p.brandName}가 조건을 다시 제안했어요`, body: p.brandReply ?? "", tone: "new" });
-  }
-  const seen = new Set<string>();
-  for (const [id, cs] of conflicts) {
-    const p = list.find((x) => x.id === id);
-    for (const c of cs) {
-      const key = [id, c.with].sort().join("|");
-      if (seen.has(key) || !p) continue;
-      seen.add(key);
-      out.push({ id, at: p.updatedAt > p.createdAt ? p.updatedAt : p.createdAt, title: `${p.brandName}와 ${c.withName} 조건이 겹쳐요`, body: c.text, tone: "warn" });
-    }
-  }
-  return out.sort((a, b) => b.at.localeCompare(a.at));
-}
-
-function readSeen() {
+function readJson<T>(key: string, fallback: T): T {
   try {
-    return localStorage.getItem(SEEN_KEY) ?? "";
+    const v = localStorage.getItem(key);
+    return v ? (JSON.parse(v) as T) : fallback;
   } catch {
-    return "";
+    return fallback;
   }
+}
+function writeJson(key: string, v: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(v));
+  } catch {}
 }
 
 const PROFILE_EVENT = "pitchpouch-profile";
@@ -91,8 +75,10 @@ export function CreatorApp() {
   const [tab, setTab] = useState<Tab>("inbox");
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [compareIds, setCompareIds] = useState<string[] | null>(null);
   const [toast, setToast] = useState("");
-  const [seenAt, setSeenAt] = useState(readSeen);
+  const [read, setRead] = useState<Set<string>>(() => new Set(readJson<string[]>(READ_KEY, [])));
+  const [demo, setDemo] = useState(() => readJson(DEMO_KEY, false));
 
   // 서버 메모리 저장소가 재시작돼도 링크가 살아 있도록 프로필을 다시 등록한다.
   useEffect(() => {
@@ -101,9 +87,10 @@ export function CreatorApp() {
 
   const refresh = useCallback(async () => {
     if (!creator) return;
-    const res = await fetch(`/api/proposals?handle=${encodeURIComponent(creator.handle)}`, { cache: "no-store" });
+    const q = `handle=${encodeURIComponent(creator.handle)}${demo ? "&demo=1" : ""}`;
+    const res = await fetch(`/api/proposals?${q}`, { cache: "no-store" });
     if (res.ok) setProposals((await res.json()).proposals);
-  }, [creator]);
+  }, [creator, demo]);
 
   useEffect(() => {
     const first = setTimeout(refresh, 0);
@@ -113,6 +100,22 @@ export function CreatorApp() {
       clearInterval(t);
     };
   }, [refresh]);
+
+  // 브라우저 뒤로가기는 항상 홈(받은함)으로 돌아온다.
+  const goHome = useCallback(() => {
+    setOpenId(null);
+    setCompareIds(null);
+    setTab("inbox");
+    window.scrollTo({ top: 0 });
+  }, []);
+  useEffect(() => {
+    window.addEventListener("popstate", goHome);
+    return () => window.removeEventListener("popstate", goHome);
+  }, [goHome]);
+  const push = () => {
+    if (!history.state?.pp) history.pushState({ pp: 1 }, "");
+    window.scrollTo({ top: 0 });
+  };
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -131,34 +134,37 @@ export function CreatorApp() {
   const alerts = useMemo(() => buildAlerts(proposals, conflicts), [proposals, conflicts]);
   const active = proposals.filter((p) => !DONE.has(p.status));
   const unread = active.filter((p) => p.status === "new" || p.status === "brand_revised").length;
-  const unseen = alerts.filter((a) => a.at > seenAt).length;
+  const unseen = alerts.filter((a) => !read.has(a.key)).length;
   const open = proposals.find((p) => p.id === openId) ?? null;
-  const markSeen = () => {
-    const now = new Date().toISOString();
-    setSeenAt(now);
-    try {
-      localStorage.setItem(SEEN_KEY, now);
-    } catch {}
+
+  const markRead = (keys: string[]) => {
+    const next = new Set([...read, ...keys]);
+    setRead(next);
+    writeJson(READ_KEY, [...next]);
+  };
+  const openProposal = (id: string) => {
+    markRead(alerts.filter((a) => a.id === id && !a.key.startsWith("clash:")).map((a) => a.key));
+    setOpenId(id);
+    push();
+  };
+  const openAlert = (a: Alert) => {
+    markRead([a.key]);
+    openProposal(a.id);
   };
 
   if (!ready) return <div className="app" />;
-  if (!creator)
-    return (
-      <Onboarding
-        onDone={(c) => writeProfile(c)}
-      />
-    );
+  if (!creator) return <Onboarding onDone={(c) => writeProfile(c)} />;
 
   return (
     <div className="app">
       <header className="top">
-        <span className="brand">
+        <button className="brand home-btn" onClick={goHome} aria-label="홈으로">
           <span className="brand-mark" style={{ color: "var(--on-brand)" }}>
             <IconShield />
           </span>
           PitchPouch
           {PRO && <span className="pro">PRO</span>}
-        </span>
+        </button>
         <button
           className="link-btn"
           onClick={() => {
@@ -174,22 +180,54 @@ export function CreatorApp() {
         <Detail
           proposal={open}
           conflicts={conflicts.get(open.id) ?? []}
-          onBack={() => setOpenId(null)}
+          onBack={goHome}
           onCopy={copy}
           onChanged={refresh}
           showToast={showToast}
         />
+      ) : compareIds ? (
+        <Compare
+          proposals={compareIds.map((id) => proposals.find((p) => p.id === id)).filter((p): p is Proposal => Boolean(p))}
+          conflicts={conflicts}
+          onBack={goHome}
+          onOpen={openProposal}
+        />
       ) : tab === "inbox" ? (
-        <Inbox proposals={active} conflicts={conflicts} onOpen={setOpenId} onPaste={() => setTab("paste")} />
+        <Inbox
+          proposals={active}
+          conflicts={conflicts}
+          pro={PRO}
+          onOpen={openProposal}
+          onPaste={() => {
+            setTab("paste");
+            push();
+          }}
+          onDemo={() => {
+            setDemo(true);
+            writeJson(DEMO_KEY, true);
+            showToast("샘플 제안 5개를 넣었어요");
+          }}
+          onCompare={(ids) => {
+            setCompareIds(ids);
+            push();
+          }}
+        />
       ) : tab === "alerts" ? (
-        <Alerts alerts={alerts} seenAt={seenAt} done={proposals.filter((p) => DONE.has(p.status))} onOpen={setOpenId} />
+        <Alerts
+          alerts={alerts}
+          read={read}
+          done={proposals.filter((p) => DONE.has(p.status))}
+          onOpenAlert={openAlert}
+          onOpen={openProposal}
+          onReadAll={() => markRead(alerts.map((a) => a.key))}
+        />
       ) : tab === "paste" ? (
         <Paste
           creator={creator}
           onDone={async (p) => {
             await refresh();
             setTab("inbox");
-            setOpenId(p.id);
+            openProposal(p.id);
           }}
         />
       ) : (
@@ -207,18 +245,19 @@ export function CreatorApp() {
         ).map(([key, label, icon]) => (
           <button
             key={key}
-            className={tab === key && !open ? "on" : ""}
+            className={tab === key && !open && !compareIds ? "on" : ""}
             onClick={() => {
               setOpenId(null);
-              if (tab === "alerts" && key !== "alerts") markSeen();
+              setCompareIds(null);
               setTab(key);
-              window.scrollTo({ top: 0 });
+              if (key === "inbox") window.scrollTo({ top: 0 });
+              else push();
             }}
           >
             {icon}
             {label}
             {key === "inbox" && unread > 0 && <span className="dot">{unread}</span>}
-            {key === "alerts" && unseen > 0 && tab !== "alerts" && <span className="dot">{unseen}</span>}
+            {key === "alerts" && unseen > 0 && <span className="dot">{unseen}</span>}
           </button>
         ))}
       </nav>
@@ -286,170 +325,6 @@ function Onboarding({ onDone }: { onDone: (c: Creator) => void }) {
         </button>
       </div>
     </div>
-  );
-}
-
-type Sort = "recent" | "upload" | "use";
-const SORTS: [Sort, string][] = [
-  ["recent", "최신순"],
-  ["upload", "업로드 빠른순"],
-  ["use", "사용 기간 짧은순"],
-];
-
-function metaLine(p: Proposal) {
-  const m = p.meta;
-  return [m?.category?.split(" · ").pop(), m?.uploadDate && `${dateLabel(m.uploadDate)} 업로드`, m?.minUse && `${m.minUse} 사용`]
-    .filter(Boolean)
-    .join(" · ");
-}
-
-function Inbox({
-  proposals,
-  conflicts,
-  onOpen,
-  onPaste,
-}: {
-  proposals: Proposal[];
-  conflicts: Map<string, Conflict[]>;
-  onOpen: (id: string) => void;
-  onPaste: () => void;
-}) {
-  const [sort, setSort] = useState<Sort>("recent");
-  const [cat, setCat] = useState("전체");
-  const todo = proposals.filter((p) => ["new", "brand_revised"].includes(p.status)).length;
-  const conflictCount = proposals.filter((p) => conflicts.has(p.id)).length;
-
-  const shown = useMemo(() => {
-    const far = "9999-12-31";
-    const list = proposals.filter((p) => cat === "전체" || p.meta?.category?.startsWith(cat));
-    if (sort === "upload") return [...list].sort((a, b) => (a.meta?.uploadDate ?? far).localeCompare(b.meta?.uploadDate ?? far));
-    if (sort === "use") return [...list].sort((a, b) => (minUseDays(a.meta?.minUse) || 999) - (minUseDays(b.meta?.minUse) || 999));
-    return list;
-  }, [proposals, sort, cat]);
-
-  return (
-    <section className="sec">
-      <h1 className="page-title">받은함</h1>
-      <p className="lead">{proposals.length ? `확인할 제안 ${todo}건` : "링크와 붙여넣기로 받은 제안이 여기 모여요."}</p>
-      {conflictCount > 0 && (
-        <div className="note warn" style={{ marginTop: 14 }}>
-          서로 조건이 겹치는 제안이 {conflictCount}건 있어요. 독점 조건을 먼저 확인해 주세요.
-        </div>
-      )}
-      {PRO && proposals.length > 1 && (
-        <div className="filters">
-          <div className="seg" style={{ ["--n" as string]: SORTS.length, ["--i" as string]: SORTS.findIndex(([k]) => k === sort) }}>
-            <span className="thumb" />
-            {SORTS.map(([k, label]) => (
-              <button key={k} className={sort === k ? "on" : ""} onClick={() => setSort(k)}>
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="chips" style={{ marginTop: 10 }}>
-            {["전체", "스킨케어", "색조", "기타"].map((c) => (
-              <button key={c} className={`chip ${cat === c ? "on" : ""}`} onClick={() => setCat(c)}>
-                {c}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      {proposals.length === 0 ? (
-        <div className="empty">
-          <IconEmpty />
-          <p>아직 받은 제안이 없어요</p>
-          <button className="btn sm" style={{ marginTop: 14 }} onClick={onPaste}>
-            받은 DM 붙여넣기
-          </button>
-        </div>
-      ) : shown.length === 0 ? (
-        <div className="empty">
-          <p>이 카테고리 제안은 없어요</p>
-        </div>
-      ) : (
-        <div className="list">
-          {shown.map((p) => {
-            const s = STATUS[p.status];
-            const risks = p.analysis?.risks.length ?? 0;
-            const clash = conflicts.get(p.id);
-            const meta = metaLine(p);
-            return (
-              <button key={p.id} className="item" onClick={() => onOpen(p.id)}>
-                <span className="tile">{p.brandName.slice(0, 1)}</span>
-                <span className="tx">
-                  <b>{p.brandName}</b>
-                  <small>
-                    {p.source === "link" ? "링크" : "붙여넣기"} · {risks ? `불리한 조항 ${risks}개` : "불리한 조항 없음"} · {timeAgo(p.createdAt)}
-                  </small>
-                  {meta && <small>{meta}</small>}
-                  {clash && <small className="clash">{clash[0].short}</small>}
-                </span>
-                <span className={`badge ${s.tone}`}>{s.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function Alerts({ alerts, seenAt, done, onOpen }: { alerts: Alert[]; seenAt: string; done: Proposal[]; onOpen: (id: string) => void }) {
-  const [view, setView] = useState<"alerts" | "done">("alerts");
-  return (
-    <section className="sec">
-      <h1 className="page-title">알림함</h1>
-      <div className="seg" style={{ marginTop: 14, ["--n" as string]: 2, ["--i" as string]: view === "alerts" ? 0 : 1 }}>
-        <span className="thumb" />
-        <button className={view === "alerts" ? "on" : ""} onClick={() => setView("alerts")}>
-          알림
-        </button>
-        <button className={view === "done" ? "on" : ""} onClick={() => setView("done")}>
-          처리한 제안 {done.length > 0 && done.length}
-        </button>
-      </div>
-      {view === "alerts" ? (
-        alerts.length === 0 ? (
-          <div className="empty">
-            <p>아직 알림이 없어요</p>
-          </div>
-        ) : (
-          <div className="list">
-            {alerts.map((a, i) => (
-              <button key={`${a.id}-${i}`} className={`item alert ${a.at > seenAt ? "unseen" : ""}`} onClick={() => onOpen(a.id)}>
-                <span className={`adot ${a.tone}`} />
-                <span className="tx">
-                  <b>{a.title}</b>
-                  {a.body && <small>{a.body}</small>}
-                </span>
-                <span className="caption">{timeAgo(a.at)}</span>
-              </button>
-            ))}
-          </div>
-        )
-      ) : done.length === 0 ? (
-        <div className="empty">
-          <p>수락하거나 거절한 제안이 여기 모여요</p>
-        </div>
-      ) : (
-        <div className="list">
-          {done.map((p) => {
-            const s = STATUS[p.status];
-            return (
-              <button key={p.id} className="item" onClick={() => onOpen(p.id)}>
-                <span className="tile">{p.brandName.slice(0, 1)}</span>
-                <span className="tx">
-                  <b>{p.brandName}</b>
-                  <small>{metaLine(p) || (p.source === "link" ? "링크로 받은 제안" : "붙여넣은 제안")}</small>
-                </span>
-                <span className={`badge ${s.tone}`}>{s.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </section>
   );
 }
 
@@ -561,10 +436,17 @@ function Detail({
 
   const act = async (body: object, msg: string) => {
     setBusy(true);
-    await fetch(`/api/proposals/${p.id}`, { method: "PATCH", body: JSON.stringify(body) });
+    const res = await fetch(`/api/proposals/${p.id}`, { method: "PATCH", body: JSON.stringify(body) });
+    const notified = res.ok ? ((await res.json()).notified as "email" | "page" | null) : null;
     await onChanged();
     setBusy(false);
-    showToast(msg);
+    showToast(
+      p.source !== "link"
+        ? msg
+        : notified === "email"
+          ? `${msg} · 브랜드에 메일로 알렸어요`
+          : `${msg} · 브랜드 화면에 알림이 떠요`,
+    );
   };
 
   const s = STATUS[p.status];
@@ -643,12 +525,4 @@ function Detail({
       </div>
     </>
   );
-}
-
-function timeAgo(iso: string) {
-  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
-  if (s < 60) return "방금";
-  if (s < 3600) return `${Math.floor(s / 60)}분 전`;
-  if (s < 86400) return `${Math.floor(s / 3600)}시간 전`;
-  return `${Math.floor(s / 86400)}일 전`;
 }

@@ -84,7 +84,7 @@ export async function analyzeProposal(text: string, creator: Creator): Promise<A
 
 type Draft = Omit<Analysis, "price" | "engine">;
 
-function finish(draft: Draft, creator: Creator, engine: Analysis["engine"]): Analysis {
+export function finish(draft: Draft, creator: Creator, engine: Analysis["engine"]): Analysis {
   const hasUsageRights = Boolean(draft.terms.usageRights);
   return { ...draft, price: estimatePrice(creator, draft.deliverables, hasUsageRights), engine };
 }
