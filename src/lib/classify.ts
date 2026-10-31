@@ -24,6 +24,8 @@ export const JEV_USD_PER_M_INPUT = 0.042;
 
 const GROUP_IDS = GROUPS.map((g) => g.id) as [GroupId, ...GroupId[]];
 const label = (id: GroupId) => GROUPS.find((g) => g.id === id)!.label;
+// 화면 이름이 바뀌어도 프롬프트는 평가해 둔 문구를 그대로 쓴다.
+const PROMPT_LABEL: Partial<Record<GroupId, string>> = { junk: "걸러낼 것" };
 
 // 공개 주소라 누가 눌러도 키 비용이 무한히 나가지 않도록 서버 한 대당 시간당 호출 수를 제한한다. 넘으면 다음 단계로 넘어간다.
 // 1,000회면 Jev와 Claude를 전부 불러도 시간당 $0.2 안쪽이다.
@@ -149,7 +151,7 @@ function systemFor(p: Profile) {
     s = `너는 크리에이터가 받은 인스타그램 DM 한 통을 읽고 분류한다.
 
 대분류(group)는 아래 4개 중 정확히 하나를 고른다. 설명이 서로 겹치지 않게 적었으니 설명을 보고 고른다.
-${GROUPS.map((g) => `- ${g.id}: ${g.label}. ${descFor(p, g)}`).join("\n")}
+${GROUPS.map((g) => `- ${g.id}: ${PROMPT_LABEL[g.id] ?? g.label}. ${descFor(p, g)}`).join("\n")}
 
 분류와 별개로 다음을 함께 판단한다.
 - reply: 크리에이터가 답장해야 하면 true. 팬 응원, 스팸, 악성, 스토리 반응은 false.
