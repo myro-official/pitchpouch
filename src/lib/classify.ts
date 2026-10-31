@@ -4,7 +4,8 @@ import { z } from "zod";
 import { CATEGORIES, type CategoryId, type Classified, type GroupId, GROUPS } from "./inbox";
 
 // 1차 Jev의 신뢰도가 이 값 이상이면 Jev 판정을 그대로 쓰고, 미만이면 Claude가 다시 분류한다.
-export const CONFIDENCE_THRESHOLD = 0.7;
+// 라벨 DM 140개 측정에서 Jev가 틀린 DM의 최고 신뢰도가 0.69였고 같은 DM의 신뢰도도 측정마다 ±0.05 흔들려서 여유를 두고 0.8로 잡았다.
+export const CONFIDENCE_THRESHOLD = 0.8;
 
 export const MODEL = process.env.CLASSIFY_MODEL ?? "claude-haiku-5-5";
 // 모델별 공식 단가(USD/100만 토큰). 목록에 없는 모델이면 비용은 계산하지 않는다.

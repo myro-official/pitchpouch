@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   type ClassifyResponse,
   type ClassifyUsage,
@@ -16,14 +16,58 @@ type Filter = "all" | GroupId;
 
 const ME = { handle: "beauty.min", followers: "7.2만" };
 
+type Sort = "urgent" | "latest";
+type Status = "all" | "unread" | "todo";
+type Preset = "all" | "today" | "7d" | "30d" | "custom";
+type Range = { preset: Preset; from: string; to: string };
+
+const PRESETS: Record<Exclude<Preset, "custom">, string> = { all: "전체 기간", today: "오늘", "7d": "최근 7일", "30d": "최근 30일" };
+const SORTS: Record<Sort, string> = { urgent: "급한 순", latest: "최신순" };
+const DAY = 86_400_000;
+
+// 서버에서 만든 화면과 브라우저의 첫 화면이 같아야 해서, 서버는 고정 시각을 쓰고 브라우저는 마운트 뒤 실제 시각으로 바뀐다.
+const DEMO_BASE = Date.parse("2026-11-01T09:00:00+09:00");
+let clientNow = 0;
+const useNow = () =>
+  useSyncExternalStore(
+    () => () => {},
+    () => (clientNow ||= Date.now()),
+    () => DEMO_BASE,
+  );
+
+function ago(min: number, now: number) {
+  if (min < 60) return min < 2 ? "방금" : `${min}분 전`;
+  if (min < 1440) return `${Math.floor(min / 60)}시간 전`;
+  if (min < 2880) return "어제";
+  const d = new Date(now - min * 60_000);
+  return `${d.getMonth() + 1}월 ${d.getDate()}일`;
+}
+
+function inRange(m: Msg, r: Range, now: number) {
+  const ts = now - m.minutesAgo * 60_000;
+  if (r.preset === "all") return true;
+  if (r.preset === "today") return ts >= new Date(now).setHours(0, 0, 0, 0);
+  if (r.preset === "7d") return ts >= now - 7 * DAY;
+  if (r.preset === "30d") return ts >= now - 30 * DAY;
+  const from = r.from ? new Date(`${r.from}T00:00:00`).getTime() : -Infinity;
+  const to = r.to ? new Date(`${r.to}T23:59:59.999`).getTime() : Infinity;
+  return ts >= from && ts <= to;
+}
+
+const short = (d: string) => (d ? `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}` : "");
+const rangeLabel = (r: Range) =>
+  r.preset === "custom" ? `${short(r.from) || "처음"} ~ ${short(r.to) || "오늘"}` : PRESETS[r.preset];
+
 const groupClass = (id: GroupId) => `c-${GROUPS.find((g) => g.id === id)?.tone || "none"}`;
 
-// 급한 순, 같으면 받은 순
-const byUrgency = (a: Msg, b: Msg) => b.urgency - a.urgency;
+// 급한 순은 같은 급함 안에서 최신순, 최신순은 받은 시각만 본다
+const sorter = (sort: Sort) => (a: Msg, b: Msg) =>
+  sort === "latest" ? a.minutesAgo - b.minutesAgo : b.urgency - a.urgency || a.minutesAgo - b.minutesAgo;
 
 function Pills({ m }: { m: Msg }) {
   return (
     <div className="pills">
+      {m.done && <i className="ok">확인 완료</i>}
       {m.reply && <i>답장 필요</i>}
       {m.urgency >= 2 && <i className="warn">급함 {m.urgency}</i>}
       {m.terms && <i>조건 있음</i>}
@@ -39,21 +83,37 @@ export function InboxApp() {
   const [overrides, setOverrides] = useState<Record<string, GroupId>>({});
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
   const [sheet, setSheet] = useState(false);
+  const [panel, setPanel] = useState<"range" | "sort" | null>(null);
+  const [sort, setSort] = useState<Sort>("urgent");
+  const [status, setStatus] = useState<Status>("all");
+  const [range, setRange] = useState<Range>({ preset: "all", from: "", to: "" });
+  const [draft, setDraft] = useState({ from: "", to: "" });
+  const [readSet, setReadSet] = useState<Set<string>>(new Set());
+  const [doneSet, setDoneSet] = useState<Set<string>>(new Set());
+  const [limits, setLimits] = useState<Record<string, number>>({});
   const [connected, setConnected] = useState(true);
   const [linking, setLinking] = useState(false);
   const [toast, setToast] = useState("");
   const [extra, setExtra] = useState<Msg[]>([]);
   const [usage, setUsage] = useState<ClassifyUsage | null>(null);
 
+  const now = useNow();
   const msgs = useMemo<Msg[]>(
-    () => [...extra, ...DEMO].map((m) => ({ ...m, group: overrides[m.id] ?? m.group })),
-    [extra, overrides],
+    () =>
+      [...extra, ...DEMO].map((m) => ({
+        ...m,
+        group: overrides[m.id] ?? m.group,
+        read: m.read || readSet.has(m.id),
+        done: m.done || doneSet.has(m.id),
+      })),
+    [extra, overrides, readSet, doneSet],
   );
   const open = msgs.find((m) => m.id === openId) ?? null;
 
   const goHome = useCallback(() => {
     setOpenId(null);
     setSheet(false);
+    setPanel(null);
   }, []);
   useEffect(() => {
     window.addEventListener("popstate", goHome);
@@ -65,6 +125,7 @@ export function InboxApp() {
     setTimeout(() => setToast(""), 1800);
   };
   const openMsg = (id: string) => {
+    setReadSet((r) => new Set(r).add(id));
     setOpenId(id);
     if (!history.state?.pp) history.pushState({ pp: 1 }, "");
     window.scrollTo({ top: 0 });
@@ -78,6 +139,15 @@ export function InboxApp() {
     setFilter("all");
     showToast(`${added.length}개를 분류했어요`);
   };
+  const toggleDone = (id: string, done: boolean) => {
+    setDoneSet((d) => {
+      const next = new Set(d);
+      if (done) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    showToast(done ? "확인 안 함으로 되돌렸어요" : "확인 완료로 표시했어요");
+  };
   const link = () => {
     setLinking(true);
     setTimeout(() => {
@@ -86,24 +156,32 @@ export function InboxApp() {
     }, 900);
   };
 
-  const needReply = msgs.filter((m) => m.reply).length;
-  const urgent = msgs.filter((m) => m.urgency >= 2).length;
-  const withTerms = msgs.filter((m) => m.terms).length;
-  const inGroup = (g: GroupId) => msgs.filter((m) => m.group === g);
-  const visible = (g: GroupId) => inGroup(g).sort(byUrgency);
+  const inPeriod = msgs.filter((m) => inRange(m, range, now));
+  const unreadN = inPeriod.filter((m) => !m.read).length;
+  const notDoneN = inPeriod.filter((m) => !m.done).length;
+  const needReply = inPeriod.filter((m) => m.reply && !m.done).length;
+  const urgent = inPeriod.filter((m) => m.urgency >= 2 && !m.done).length;
+  const withTerms = inPeriod.filter((m) => m.terms && !m.done).length;
+  const unreadAll = msgs.filter((m) => !m.read).length;
+  const scoped = inPeriod.filter((m) => (status === "unread" ? !m.read : status === "todo" ? !m.done : true));
+  const inGroup = (g: GroupId) => scoped.filter((m) => m.group === g);
+  const visible = (g: GroupId) => inGroup(g).sort(sorter(sort));
 
   const Row = ({ m }: { m: Msg }) => {
     const hidden = m.group === "junk" && !revealed.has(m.id);
     return (
-      <div className="item">
+      <div className={`item ${m.read ? "" : "unread"}`}>
         <button className="row-main" onClick={() => openMsg(m.id)}>
           <span className="tile">{m.name.slice(0, 1)}</span>
           <span className="tx">
-            <b>{m.name}</b>
+            <b>
+              {!m.read && <i className="udot" aria-label="안 읽음" />}
+              {m.name}
+            </b>
             <small>{hidden ? "걸러낸 메시지라 가려 뒀어요" : m.text}</small>
             <Pills m={m} />
           </span>
-          <span className="caption">{m.ago}</span>
+          <span className="caption">{ago(m.minutesAgo, now)}</span>
         </button>
         <button className="go" aria-label="채팅방으로 이동" onClick={() => goChat(m)}>
           <IconChat size={20} />
@@ -113,8 +191,13 @@ export function InboxApp() {
   };
 
   const filters: [Filter, string, number][] = [
-    ["all", "전체", msgs.length],
+    ["all", "전체", scoped.length],
     ...GROUPS.map((g) => [g.id, g.label, inGroup(g.id).length] as [Filter, string, number]),
+  ];
+  const statuses: [Status, string][] = [
+    ["all", "전체"],
+    ["unread", `안 읽음 ${unreadN}`],
+    ["todo", `확인 안 함 ${notDoneN}`],
   ];
 
   const shown = filter === "all" ? GROUPS : GROUPS.filter((g) => g.id === filter);
@@ -138,16 +221,18 @@ export function InboxApp() {
           m={open}
           shown={open.group !== "junk" || revealed.has(open.id)}
           onReveal={() => setRevealed(new Set([...revealed, open.id]))}
+          now={now}
           onBack={() => history.back()}
           onChange={() => setSheet(true)}
           onGo={() => goChat(open)}
+          onToggleDone={() => toggleDone(open.id, open.done)}
         />
       ) : tab === "inbox" ? (
         <section className="sec">
           <h1 className="page-title">
-            오늘 DM {msgs.length}개,
+            DM {inPeriod.length}개,
             <br />
-            답장할 건 {needReply}개예요
+            안 읽은 건 {unreadN}개예요
           </h1>
           <p className="lead">다음에 할 행동으로 나눴어요. 확인하고 바로 채팅방으로 가요.</p>
           {usage && (
@@ -162,7 +247,7 @@ export function InboxApp() {
           <div className="stat-row">
             <div className="stat">
               <b>{needReply}</b>
-              <small>답장 필요</small>
+              <small>답장할 것</small>
             </div>
             <div className="stat hot">
               <b>{urgent}</b>
@@ -184,9 +269,28 @@ export function InboxApp() {
             </div>
           </div>
 
+          <div className="seg" style={{ marginTop: 14, ["--n" as string]: 3, ["--i" as string]: statuses.findIndex(([k]) => k === status) }}>
+            <div className="thumb" />
+            {statuses.map(([k, label]) => (
+              <button key={k} className={status === k ? "on" : ""} onClick={() => setStatus(k)}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="title-row" style={{ marginTop: 10 }}>
+            <button className="sort-btn" onClick={() => setPanel("range")}>
+              기간 · {rangeLabel(range)} ▾
+            </button>
+            <button className="sort-btn" onClick={() => setPanel("sort")}>
+              {SORTS[sort]} ▾
+            </button>
+          </div>
+
           {shown.map((g) => {
             const list = visible(g.id);
             const collapsed = filter === "all" && g.id === "junk" && !junkOpen;
+            const lim = limits[g.id] ?? (filter === "all" ? 8 : 30);
             return (
               <div key={g.id}>
                 <div className="title-row">
@@ -210,7 +314,12 @@ export function InboxApp() {
                         <div>해당하는 DM이 없어요</div>
                       </div>
                     ) : (
-                      list.map((m) => <Row key={m.id} m={m} />)
+                      list.slice(0, lim).map((m) => <Row key={m.id} m={m} />)
+                    )}
+                    {list.length > lim && (
+                      <button className="btn ghost sm more" onClick={() => setLimits({ ...limits, [g.id]: lim + 30 })}>
+                        {list.length - lim}개 더 보기
+                      </button>
                     )}
                   </div>
                 )}
@@ -243,46 +352,98 @@ export function InboxApp() {
           >
             {icon}
             {label}
-            {key === "inbox" && urgent > 0 && <span className="dot">{urgent}</span>}
+            {key === "inbox" && unreadAll > 0 && <span className="dot">{unreadAll > 99 ? "99+" : unreadAll}</span>}
           </button>
         ))}
       </nav>
 
-      <div className={`bsheet ${sheet && open ? "open" : ""}`}>
-        <div className="bsheet-scrim" onClick={() => setSheet(false)} />
-        <div className="bsheet-panel">
-          <div className="bsheet-grab" />
-          <div className="bsheet-head">
-            <h2 className="sec-title">분류 바꾸기</h2>
-            <button className="link-btn" onClick={() => setSheet(false)}>
-              닫기
+      <Sheet open={sheet && !!open} title="분류 바꾸기" onClose={() => setSheet(false)}>
+        <div className="sheet-list">
+          {GROUPS.map((g) => {
+            const on = open?.group === g.id;
+            return (
+              <button
+                key={g.id}
+                className={`sheet-opt ${on ? "on" : ""}`}
+                onClick={() => {
+                  if (!open) return;
+                  setOverrides({ ...overrides, [open.id]: g.id });
+                  setSheet(false);
+                  showToast(`${g.label}(으)로 바꿨어요`);
+                }}
+              >
+                <span>
+                  {g.label}
+                  <small className="opt-desc">{g.desc}</small>
+                </span>
+                {on && <IconCheck size={18} />}
+              </button>
+            );
+          })}
+        </div>
+      </Sheet>
+
+      <Sheet open={panel === "sort"} title="정렬" onClose={() => setPanel(null)}>
+        <div className="sheet-list">
+          {(Object.keys(SORTS) as Sort[]).map((k) => (
+            <button
+              key={k}
+              className={`sheet-opt ${sort === k ? "on" : ""}`}
+              onClick={() => {
+                setSort(k);
+                setPanel(null);
+              }}
+            >
+              <span>
+                {SORTS[k]}
+                <small className="opt-desc">{k === "urgent" ? "급한 정도가 높은 순, 같으면 최신순" : "받은 시각이 가까운 순"}</small>
+              </span>
+              {sort === k && <IconCheck size={18} />}
             </button>
+          ))}
+        </div>
+      </Sheet>
+
+      <Sheet open={panel === "range"} title="기간" onClose={() => setPanel(null)}>
+        <div className="sheet-list">
+          {(Object.keys(PRESETS) as Exclude<Preset, "custom">[]).map((k) => (
+            <button
+              key={k}
+              className={`sheet-opt ${range.preset === k ? "on" : ""}`}
+              onClick={() => {
+                setRange({ preset: k, from: "", to: "" });
+                setPanel(null);
+              }}
+            >
+              {PRESETS[k]}
+              {range.preset === k && <IconCheck size={18} />}
+            </button>
+          ))}
+        </div>
+        <p className="group-title">직접 설정</p>
+        <div className="field row2" style={{ marginTop: 8 }}>
+          <div>
+            <label className="label">시작일</label>
+            <input className="input date" type="date" value={draft.from} onChange={(e) => setDraft({ ...draft, from: e.target.value })} />
           </div>
-          <div className="sheet-list">
-            {GROUPS.map((g) => {
-              const on = open?.group === g.id;
-              return (
-                <button
-                  key={g.id}
-                  className={`sheet-opt ${on ? "on" : ""}`}
-                  onClick={() => {
-                    if (!open) return;
-                    setOverrides({ ...overrides, [open.id]: g.id });
-                    setSheet(false);
-                    showToast(`${g.label}(으)로 바꿨어요`);
-                  }}
-                >
-                  <span>
-                    {g.label}
-                    <small className="opt-desc">{g.desc}</small>
-                  </span>
-                  {on && <IconCheck size={18} />}
-                </button>
-              );
-            })}
+          <div>
+            <label className="label">종료일</label>
+            <input className="input date" type="date" value={draft.to} onChange={(e) => setDraft({ ...draft, to: e.target.value })} />
           </div>
         </div>
-      </div>
+        <button
+          className="btn"
+          style={{ marginTop: 16 }}
+          disabled={!draft.from && !draft.to}
+          onClick={() => {
+            const [from, to] = draft.from && draft.to && draft.from > draft.to ? [draft.to, draft.from] : [draft.from, draft.to];
+            setRange({ preset: "custom", from, to });
+            setPanel(null);
+          }}
+        >
+          이 기간으로 보기
+        </button>
+      </Sheet>
 
       {toast && <div className="toast">{toast}</div>}
     </div>
@@ -293,16 +454,20 @@ function Detail({
   m,
   shown,
   onReveal,
+  now,
   onBack,
   onChange,
   onGo,
+  onToggleDone,
 }: {
   m: Msg;
   shown: boolean;
   onReveal: () => void;
+  now: number;
   onBack: () => void;
   onChange: () => void;
   onGo: () => void;
+  onToggleDone: () => void;
 }) {
   const g = GROUPS.find((x) => x.id === m.group)!;
   return (
@@ -320,7 +485,8 @@ function Detail({
           </button>
         </div>
         <p className="caption">
-          {m.pasted ? "붙여넣은 DM" : `@${m.handle}`} · {m.ago}
+          {m.pasted ? "붙여넣은 DM" : `@${m.handle}`} · {ago(m.minutesAgo, now)}
+          {m.minutesAgo >= 1440 && ` · ${new Date(now - m.minutesAgo * 60_000).toLocaleString("ko-KR", { month: "long", day: "numeric", hour: "numeric", minute: "2-digit" })}`}
         </p>
         {shown ? (
           <div className="reply">{m.text}</div>
@@ -363,6 +529,9 @@ function Detail({
           </div>
         </div>
         {m.termsNote && <div className="note" style={{ marginTop: 12 }}>적힌 조건: {m.termsNote}</div>}
+        <button className="btn ghost" style={{ marginTop: 16 }} onClick={onToggleDone}>
+          {m.done ? "확인 안 함으로 되돌리기" : "확인 완료로 표시"}
+        </button>
       </section>
 
       <div className="cta">
@@ -455,7 +624,9 @@ function Paste({ onDone }: { onDone: (added: Msg[], usage: ClassifyUsage) => voi
           id: r.id,
           name: `붙여넣은 DM ${i + 1}`,
           handle: "",
-          ago: "방금",
+          minutesAgo: 0,
+          read: false,
+          done: false,
           text: items[i],
           group: r.group,
           reply: r.reply,
@@ -512,5 +683,23 @@ function Paste({ onDone }: { onDone: (added: Msg[], usage: ClassifyUsage) => voi
         </button>
       </div>
     </>
+  );
+}
+
+function Sheet({ open, title, onClose, children }: { open: boolean; title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div className={`bsheet ${open ? "open" : ""}`}>
+      <div className="bsheet-scrim" onClick={onClose} />
+      <div className="bsheet-panel">
+        <div className="bsheet-grab" />
+        <div className="bsheet-head">
+          <h2 className="sec-title">{title}</h2>
+          <button className="link-btn" onClick={onClose}>
+            닫기
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
   );
 }

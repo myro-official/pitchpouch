@@ -314,3 +314,9 @@ p { text-wrap: pretty; }
 .opt-desc { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-top: 2px; }
 .stat-row .stat b { font-size: 22px; }
 .dc.num { font-size: 15px; font-weight: 800; }
+
+/* 읽음 상태, 더 보기 */
+.item.unread .tx b { font-weight: 800; }
+.udot { display: inline-block; width: 8px; height: 8px; border-radius: 99px; background: var(--brand-ink); margin-right: 6px; vertical-align: 1px; }
+.pills i.ok { background: var(--ok-weak); color: var(--ok); }
+.btn.more { display: flex; margin: 10px auto 0; }

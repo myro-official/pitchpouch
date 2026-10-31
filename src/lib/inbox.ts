@@ -1,3 +1,5 @@
+import dummy from "./dummy.json";
+
 export type GroupId = "gain" | "rel" | "todo" | "junk";
 
 export type Group = { id: GroupId; label: string; hint: string; tone: "new" | "ok" | "warn" | ""; desc: string };
@@ -91,7 +93,10 @@ export type Msg = {
   id: string;
   name: string;
   handle: string;
-  ago: string;
+  // 받은 지 몇 분 지났는지. 화면에서 지금 시각 기준으로 날짜를 계산한다
+  minutesAgo: number;
+  read: boolean;
+  done: boolean;
   text: string;
   group: GroupId;
   // 시연 데이터의 정답 소분류. 화면에는 쓰지 않는다.
@@ -107,109 +112,113 @@ export type Msg = {
   jev?: Classified["jev"];
 };
 
-const RAW: (Omit<Msg, "group"> & { category: CategoryId })[] = [
+const RAW: (Omit<Msg, "group" | "read" | "done"> & { category: CategoryId })[] = [
   {
-    id: "m1", name: "글로우랩 마케팅", handle: "glowlab.official", ago: "방금",
+    id: "m1", name: "글로우랩 마케팅", handle: "glowlab.official", minutesAgo: 1,
     text: "안녕하세요 글로우랩입니다! 신제품 세럼 릴스 1건에 광고비 150만원 제안드리고 싶어요. 11/20 업로드, 2차 활용은 3개월 가능하면 좋겠습니다. 가능하시면 단가표 부탁드려요.",
     category: "paid", reply: true, urgency: 3, terms: true, termsNote: "150만원 · 릴스 1건 · 11/20 · 2차 활용 3개월",
     reason: "광고비를 명시하고 업로드 일정을 정해 제안했어요.",
   },
   {
-    id: "m2", name: "더마시그널", handle: "dermasignal_kr", ago: "12분 전",
+    id: "m2", name: "더마시그널", handle: "dermasignal_kr", minutesAgo: 12,
     text: "안녕하세요 :) 저희 진정 앰플 제품 보내드리고 싶은데 주소 알려주실 수 있을까요? 사용해 보시고 마음에 드시면 스토리 한 번만 부탁드려요!",
     category: "sponsor", reply: true, urgency: 1, terms: false,
     reason: "제품 제공이 중심이고 원고료 언급이 없어요.",
   },
   {
-    id: "m3", name: "유나", handle: "yuna.0214", ago: "25분 전",
+    id: "m3", name: "유나", handle: "yuna.0214", minutesAgo: 25,
     text: "언니 어제 올리신 루틴 영상 보고 그대로 따라 했는데 진짜 피부결 달라졌어요ㅠㅠ 항상 잘 보고 있어요 응원해요!!",
     category: "fan", reply: false, urgency: 0, terms: false,
     reason: "응원과 감상만 있고 요청이 없어요.",
   },
   {
-    id: "m4", name: "이도현", handle: "dohyun_lee", ago: "40분 전",
+    id: "m4", name: "이도현", handle: "dohyun_lee", minutesAgo: 40,
     text: "안녕하세요 인스타 보고 연락드려요. 뷰티 쪽 크리에이터 준비하는 대학생인데, 30분만 커피 한 잔 사드리고 시작 과정 여쭤봐도 될까요?",
     category: "coffee", reply: true, urgency: 1, terms: false,
     reason: "처음 연락해 만남과 조언을 청하고 수익은 없어요.",
   },
   {
-    id: "m5", name: "핏코 스튜디오", handle: "fitco.studio", ago: "1시간 전",
+    id: "m5", name: "핏코 스튜디오", handle: "fitco.studio", minutesAgo: 60,
     text: "공동구매 제안드려요. 저희 선크림을 팔로워분들께 판매해 주시면 판매가의 25%를 수수료로 드립니다. 1차 물량 500개, 11월 말 오픈 예정이에요.",
     category: "groupbuy", reply: true, urgency: 2, terms: true, termsNote: "수수료 25% · 500개 · 11월 말 오픈",
     reason: "판매 수익을 나누는 공동구매이고 수수료율이 적혀 있어요.",
   },
   {
-    id: "m6", name: "익명", handle: "user_82716", ago: "1시간 전",
+    id: "m6", name: "익명", handle: "user_82716", minutesAgo: 60,
     text: "(성적인 표현이 담긴 메시지)",
     category: "abuse", reply: false, urgency: 0, terms: false,
     reason: "성적 수치심을 주는 표현이 있어요.",
   },
   {
-    id: "m7", name: "스테이 에이전시", handle: "stay.agency", ago: "2시간 전",
+    id: "m7", name: "스테이 에이전시", handle: "stay.agency", minutesAgo: 120,
     text: "안녕하세요, 스테이 에이전시 매니저입니다. 팔로워 7만 이상 뷰티 크리에이터분들 대상으로 전속 계약을 안내드리고 있어요. 이번 주 중 20분 통화 가능하실까요?",
     category: "recruit", reply: true, urgency: 2, terms: false,
     reason: "에이전시가 소속 계약을 제안했어요.",
   },
   {
-    id: "m8", name: "민서", handle: "minseo_pic", ago: "2시간 전",
+    id: "m8", name: "민서", handle: "minseo_pic", minutesAgo: 120,
     text: "오랜만이야! 다음 주 토요일에 시간 돼? 성수에서 밥 한번 먹자~",
     category: "friend", reply: true, urgency: 1, terms: false,
     reason: "아는 사이의 사적인 약속 연락이에요.",
   },
   {
-    id: "m9", name: "서울뷰티위크", handle: "seoulbeautyweek", ago: "3시간 전",
+    id: "m9", name: "서울뷰티위크", handle: "seoulbeautyweek", minutesAgo: 180,
     text: "11/29 성수 팝업 현장 토크 세션에 패널로 모시고 싶습니다. 출연료 50만원, 교통비 별도 지원이에요. 11/10까지 회신 부탁드립니다.",
     category: "event", reply: true, urgency: 3, terms: true, termsNote: "출연료 50만원 · 11/29 · 회신 11/10",
     reason: "행사 출연 일정과 출연료가 적혀 있어요.",
   },
   {
-    id: "m10", name: "클리어스킨_공식", handle: "clearskin.promo", ago: "3시간 전",
+    id: "m10", name: "클리어스킨_공식", handle: "clearskin.promo", minutesAgo: 180,
     text: "[당첨 안내] 선착순 협찬 이벤트 당첨! 배송비 4,900원만 아래 링크에서 먼저 결제해 주시면 정품 풀세트를 보내드립니다. bit.ly/xxxx",
     category: "scam", reply: false, urgency: 0, terms: false,
     reason: "선입금을 요구하고 외부 링크로 유도해요.",
   },
   {
-    id: "m11", name: "하리", handle: "hari.daily", ago: "4시간 전",
+    id: "m11", name: "하리", handle: "hari.daily", minutesAgo: 240,
     text: "안녕하세요! 저도 스킨케어 콘텐츠 하는데 같이 '나의 3단계 루틴 vs 너의 루틴' 릴스 만들어 보면 어떨까요? 서로 계정에 같이 올리면 좋을 것 같아요.",
     category: "collab", reply: true, urgency: 1, terms: false,
     reason: "결과물을 함께 만들어 같이 올리자는 제안이에요.",
   },
   {
-    id: "m12", name: "소라", handle: "sora_skin", ago: "5시간 전",
+    id: "m12", name: "소라", handle: "sora_skin", minutesAgo: 300,
     text: "혹시 영상에서 쓰신 토너 이름이 뭐예요? 지성인데 써도 괜찮을까요?",
     category: "inquiry", reply: true, urgency: 1, terms: false,
     reason: "내 콘텐츠 속 제품에 대한 질문이에요.",
   },
   {
-    id: "m13", name: "주문 문의", handle: "buyer_jiwon", ago: "5시간 전",
+    id: "m13", name: "주문 문의", handle: "buyer_jiwon", minutesAgo: 300,
     text: "어제 공구로 주문한 세트 아직 배송 시작이 안 됐다고 떠요. 언제쯤 받을 수 있을까요?",
     category: "order", reply: true, urgency: 3, terms: false,
     reason: "내가 판 상품의 배송 지연 문의예요.",
   },
   {
-    id: "m14", name: "브이로그매거진", handle: "vlog.magazine", ago: "6시간 전",
+    id: "m14", name: "브이로그매거진", handle: "vlog.magazine", minutesAgo: 360,
     text: "저희 매거진 웹진 기사에 크리에이터님 루틴 영상 캡처 몇 장을 사용하고 싶습니다. 출처 표기하고 쓰면 허락해 주실 수 있을까요?",
     category: "usage", reply: true, urgency: 2, terms: false,
     reason: "내 영상 캡처를 가져다 쓰겠다는 허락 요청이에요.",
   },
   {
-    id: "m15", name: "팔로우업", handle: "followup_boost", ago: "7시간 전",
+    id: "m15", name: "팔로우업", handle: "followup_boost", minutesAgo: 420,
     text: "팔로워 1만명 3만원! 좋아요 릴스 조회수 패키지 상시 판매합니다. 문의주세요 (대량 발송)",
     category: "spam", reply: false, urgency: 0, terms: false,
     reason: "나와 상관없는 팔로워 판매 홍보예요.",
   },
   {
-    id: "m16", name: "익명", handle: "gg_9981", ago: "8시간 전",
+    id: "m16", name: "익명", handle: "gg_9981", minutesAgo: 480,
     text: "(외모를 비하하는 악성 메시지)",
     category: "abuse", reply: false, urgency: 0, terms: false,
     reason: "외모 비하와 비방이 담겨 있어요.",
   },
   {
-    id: "m17", name: "지수", handle: "jisu__kim", ago: "9시간 전",
+    id: "m17", name: "지수", handle: "jisu__kim", minutesAgo: 540,
     text: "🔥🔥🔥",
     category: "story", reply: false, urgency: 0, terms: false,
     reason: "스토리에 달린 이모지 반응이에요.",
   },
 ];
 
-export const DEMO: Msg[] = RAW.map((m) => ({ ...m, group: CAT[m.category].group }));
+// 손으로 쓴 17개는 오늘 받은 것으로 두고 앞 10개만 안 읽은 상태로 둔다.
+const handwritten: Msg[] = RAW.map((m, i) => ({ ...m, group: CAT[m.category].group, read: i >= 10, done: false }));
+
+// 더미 받은함: 시험에 쓴 라벨 DM 140개를 실제 분류 파이프라인에 통과시킨 결과(scripts/eval/build-dummy.mjs)
+export const DEMO: Msg[] = [...handwritten, ...(dummy as unknown as Msg[])].sort((a, b) => a.minutesAgo - b.minutesAgo);
