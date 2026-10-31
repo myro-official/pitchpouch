@@ -60,7 +60,7 @@ const RISK_NO = "위 신호가 없다. 브랜드나 회사가 제품·광고·�
 
 const descFor = (p: Profile, g: (typeof GROUPS)[number]) => (p === "v2" ? DESC_V2[g.id] : g.desc);
 
-// 사기·유인에 자주 나오는 표현. 하나라도 있으면 Jev 신뢰도와 상관없이 Claude가 다시 본다. 판정을 바꾸지 않고 검토만 보낸다.
+// 사기·유인에 자주 나오는 표현. Jev가 걸러낼 것이 아닌 것으로 읽었는데 하나라도 있으면 신뢰도와 상관없이 Claude가 다시 본다.
 const RISK =
   /선입금|보증금|등록비|가입비|먼저\s*(?:결제|입금|송금)|입금해\s*주|송금|계좌\s*번호|계좌로|현금|수표|비밀.{0,6}(?:보장|유지)|신분.{0,8}(?:노출|보호)|신원|리딩방|수익\s*보장|무방문|본인\s*(?:확인|인증)|개인정보|USDT|딥페이크|합의금|고소|당첨/;
 
@@ -218,8 +218,12 @@ export async function classifyDm(text: string, opts: Options = {}): Promise<Outc
     try {
       const j = await askJev(text, profile);
       jevInputTokens = j.inputTokens;
-      const veto = profile === "v2" && RISK.test(text);
-      const why = j.group === "unclear" ? "unclear" : j.risk ? "risk" : veto ? "veto" : j.confidence < threshold ? "low" : "ok";
+      // 위험 신호는 Jev가 걸러낼 것이 아닌 것으로 읽었을 때만 의미가 있다. 사기가 정상 제안으로 통과하는 경우를 막는 장치라서,
+      // 이미 걸러낼 것으로 읽은 DM까지 다시 보면 비용만 는다(새 DM 40개 중 위험 신호 20개가 이미 걸러낼 것이었다).
+      const flagged = j.group !== "junk" && j.group !== "unclear";
+      const veto = profile === "v2" && flagged && RISK.test(text);
+      const why =
+        j.group === "unclear" ? "unclear" : profile === "v2" && flagged && j.risk ? "risk" : veto ? "veto" : j.confidence < threshold ? "low" : "ok";
       jev = { group: j.group, confidence: Number(j.confidence.toFixed(2)), accepted: why === "ok", why };
       if (jev.accepted && j.group !== "unclear") {
         const group = j.group;
