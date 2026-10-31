@@ -228,9 +228,15 @@ export function InboxApp() {
           </span>
           PitchPouch
         </button>
-        <button className={`icon-btn ${tab === "settings" && !open ? "on" : ""}`} onClick={openSettings} aria-label="설정">
-          <IconSettings size={22} />
-        </button>
+        {tab === "settings" && !open ? (
+          <button className="link-btn" style={{ fontSize: 15 }} onClick={() => history.back()}>
+            보관함
+          </button>
+        ) : (
+          <button className="icon-btn" onClick={openSettings} aria-label="설정">
+            <IconSettings size={22} />
+          </button>
+        )}
       </header>
 
       {open ? (
@@ -241,7 +247,7 @@ export function InboxApp() {
           now={now}
           onBack={() => history.back()}
           onChange={() => setSheet(true)}
-          onSend={open.senderId ? (text) => sendReply(open, text) : undefined}
+          onSend={(text) => (open.senderId ? sendReply(open, text) : Promise.resolve("시연용 DM이라 보낼 수 없어요"))}
         />
       ) : tab === "inbox" && authed === false ? (
         <Login onDone={loadLive} />
@@ -335,7 +341,7 @@ export function InboxApp() {
           })}
         </section>
       ) : (
-        <Settings onBack={() => history.back()} onLogout={authed ? logout : undefined} />
+        <Settings onLogout={authed ? logout : undefined} />
       )}
 
       <Sheet open={sheet && !!open} title="분류 바꾸기" onClose={() => setSheet(false)}>
@@ -473,13 +479,10 @@ function Detail({
   );
 }
 
-function Settings({ onBack, onLogout }: { onBack: () => void; onLogout?: () => void }) {
+function Settings({ onLogout }: { onLogout?: () => void }) {
   return (
     <section className="sec">
-      <button className="link-btn" onClick={onBack} style={{ display: "flex", alignItems: "center", gap: 2, marginLeft: -6 }}>
-        <IconBack size={18} /> 보관함
-      </button>
-      <h1 className="page-title" style={{ marginTop: 8 }}>설정</h1>
+      <h1 className="page-title">설정</h1>
       {onLogout && (
         <button className="btn ghost" style={{ marginTop: 24 }} onClick={onLogout}>
           로그아웃
