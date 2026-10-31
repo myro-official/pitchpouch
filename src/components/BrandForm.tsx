@@ -1,12 +1,47 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import type { FormDraft } from "@/lib/extract";
 import type { Creator, Deliverables } from "@/lib/types";
-import { IconShield } from "./icons";
+import { IconPaste, IconShield } from "./icons";
 
 const USAGE = ["없음", "3개월", "6개월", "1년", "기간 제한 없음"];
 const REVISIONS = ["1회", "2회", "3회", "제한 없음"];
+type Part = "brand" | "content" | "budget" | "terms";
+
+function Fold({
+  title,
+  summary,
+  open,
+  onToggle,
+  done,
+  children,
+}: {
+  title: string;
+  summary: string;
+  open: boolean;
+  onToggle: () => void;
+  done: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <section className={`sec fold ${open ? "open" : ""}`}>
+      <button className="fold-head" onClick={onToggle} aria-expanded={open}>
+        <span className="fold-tx">
+          <span className="sec-title">{title}</span>
+          {!open && <small className={done ? "" : "todo"}>{summary}</small>}
+        </span>
+        <svg className="fold-chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
+      <div className="fold-body">
+        <div>{children}</div>
+      </div>
+    </section>
+  );
+}
 
 export function BrandForm({ handle }: { handle: string }) {
   const router = useRouter();
@@ -25,6 +60,12 @@ export function BrandForm({ handle }: { handle: string }) {
   const [memo, setMemo] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [open, setOpen] = useState<Part | null>("brand");
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [paste, setPaste] = useState("");
+  const [filling, setFilling] = useState(false);
+  const [filled, setFilled] = useState("");
+  const toggle = (p: Part) => setOpen(open === p ? null : p);
 
   useEffect(() => {
     fetch(`/api/creators/${encodeURIComponent(handle)}`)
@@ -35,6 +76,53 @@ export function BrandForm({ handle }: { handle: string }) {
 
   const budgetOk = productOnly || Number(budget) > 0;
   const ok = brandName.trim() && product.trim() && budgetOk && d.feed + d.reels + d.story > 0;
+
+  const autofill = async () => {
+    setFilling(true);
+    setFilled("");
+    setErr("");
+    const res = await fetch("/api/extract", { method: "POST", body: JSON.stringify({ text: paste }) });
+    setFilling(false);
+    if (!res.ok) return setFilled((await res.json()).error);
+    const f = (await res.json()).draft as FormDraft;
+    let n = 0;
+    const put = <T,>(v: T | null | undefined, set: (v: T) => void) => {
+      if (v !== null && v !== undefined && v !== "") {
+        set(v);
+        n++;
+      }
+    };
+    put(f.brandName, setBrandName);
+    put(f.contact, setContact);
+    put(f.product, setProduct);
+    put(f.deliverables, setD);
+    put(f.schedule, setSchedule);
+    put(f.usage, setUsage);
+    put(f.revisions, setRevisions);
+    put(f.exclusivity, setExclusivity);
+    put(f.memo, setMemo);
+    if (f.productOnly) {
+      setProductOnly(true);
+      setBudget("");
+      n++;
+    } else if (f.budgetMan) {
+      setProductOnly(false);
+      setBudget(String(f.budgetMan));
+      n++;
+    }
+    if (!n) return setFilled("알아볼 수 있는 조건이 없어요. 아래 칸에 직접 적어 주세요.");
+    setFilled(`${n}개 항목을 채웠어요. 펼쳐서 맞는지 확인해 주세요.`);
+    setPasteOpen(false);
+    setOpen(null);
+  };
+
+  const items = [d.feed && `피드 ${d.feed}`, d.reels && `릴스 ${d.reels}`, d.story && `스토리 ${d.story}`].filter(Boolean);
+  const summaries = {
+    brand: [brandName, product].filter(Boolean).join(" · ") || "브랜드명과 제품을 적어 주세요",
+    content: items.length ? [items.join(", "), schedule].filter(Boolean).join(" · ") : "콘텐츠를 1개 이상 골라 주세요",
+    budget: productOnly ? "현금 없이 제품만 제공" : Number(budget) > 0 ? `${budget}만원` : "원고료를 적어 주세요",
+    terms: [`2차 활용 ${usage}`, `수정 ${revisions}`, exclusivity && "독점 있음", memo && "추가 요청 있음"].filter(Boolean).join(" · "),
+  };
 
   const submit = async () => {
     setBusy(true);
@@ -75,7 +163,7 @@ export function BrandForm({ handle }: { handle: string }) {
     );
 
   return (
-    <div className="app" style={{ paddingBottom: 24 }}>
+    <div className="app" style={{ paddingBottom: 0 }}>
       <header className="top">
         <span className="brand">
           <span className="brand-mark" style={{ color: "var(--on-brand)" }}>
@@ -92,10 +180,39 @@ export function BrandForm({ handle }: { handle: string }) {
           협찬을 제안해요
         </h1>
         <p className="lead">가입 없이 작성하고, 답변은 이 기기에서 바로 확인할 수 있어요.</p>
+        <div className="paste-box">
+          {!pasteOpen ? (
+            <button className="paste-open" onClick={() => setPasteOpen(true)}>
+              <span className="ico"><IconPaste size={18} /></span>
+              <span className="tx">
+                <b>쓰던 제안 양식이 있나요?</b>
+                <small>붙여넣으면 아래 칸을 자동으로 채워요</small>
+              </span>
+            </button>
+          ) : (
+            <>
+              <label className="label">협찬 제안 문구 붙여넣기</label>
+              <textarea
+                className="textarea"
+                style={{ minHeight: 140 }}
+                value={paste}
+                onChange={(e) => setPaste(e.target.value)}
+                placeholder={"예)\n브랜드: OO코스메틱\n제품: 진정 세럼 50ml\n콘텐츠: 릴스 1건\n원고료: 30만원\n업로드: 11월 20일까지\n2차 활용: 6개월"}
+                autoFocus
+              />
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button className="btn ghost sm" onClick={() => setPasteOpen(false)}>닫기</button>
+                <button className="btn sm" style={{ flex: 1 }} disabled={paste.trim().length < 10 || filling} onClick={autofill}>
+                  {filling ? "읽는 중" : "자동으로 채우기"}
+                </button>
+              </div>
+            </>
+          )}
+          {filled && <p className="fill-note">{filled}</p>}
+        </div>
       </section>
 
-      <section className="sec">
-        <h2 className="sec-title">브랜드</h2>
+      <Fold title="브랜드" summary={summaries.brand} done={Boolean(brandName.trim() && product.trim())} open={open === "brand"} onToggle={() => toggle("brand")}>
         <div className="field row2">
           <div>
             <label className="label">브랜드명</label>
@@ -110,10 +227,9 @@ export function BrandForm({ handle }: { handle: string }) {
           <label className="label">제품</label>
           <input className="input" value={product} onChange={(e) => setProduct(e.target.value)} placeholder="신제품 진정 세럼 50ml" />
         </div>
-      </section>
+      </Fold>
 
-      <section className="sec">
-        <h2 className="sec-title">요청 콘텐츠</h2>
+      <Fold title="요청 콘텐츠" summary={summaries.content} done={items.length > 0} open={open === "content"} onToggle={() => toggle("content")}>
         <div className="field" style={{ display: "grid", gap: 8 }}>
           {(
             [
@@ -136,10 +252,9 @@ export function BrandForm({ handle }: { handle: string }) {
           <label className="label">업로드 희망 일정</label>
           <input className="input" value={schedule} onChange={(e) => setSchedule(e.target.value)} placeholder="11월 20일까지" />
         </div>
-      </section>
+      </Fold>
 
-      <section className="sec">
-        <h2 className="sec-title">원고료</h2>
+      <Fold title="원고료" summary={summaries.budget} done={budgetOk} open={open === "budget"} onToggle={() => toggle("budget")}>
         <div className="field">
           <label className="label">현금 원고료 (만원)</label>
           <input
@@ -156,10 +271,9 @@ export function BrandForm({ handle }: { handle: string }) {
             현금 없이 제품만 제공
           </button>
         </div>
-      </section>
+      </Fold>
 
-      <section className="sec">
-        <h2 className="sec-title">조건</h2>
+      <Fold title="조건" summary={summaries.terms} done open={open === "terms"} onToggle={() => toggle("terms")}>
         <div className="field">
           <label className="label">2차 활용 (광고 소재로 재사용)</label>
           <div className="chips">
@@ -188,8 +302,8 @@ export function BrandForm({ handle }: { handle: string }) {
           <label className="label">추가 요청 (선택)</label>
           <textarea className="textarea" style={{ minHeight: 96 }} value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="예: 업로드 후 6개월간 삭제하지 말아 주세요" />
         </div>
-        {err && <p className="err">{err}</p>}
-      </section>
+      </Fold>
+      {err && <p className="err" style={{ padding: "0 20px" }}>{err}</p>}
 
       <div className="cta" style={{ bottom: 0 }}>
         <button className="btn" disabled={!ok || busy} onClick={submit}>
