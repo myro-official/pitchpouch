@@ -14,7 +14,8 @@ import { IconBack, IconChat, IconCheck, IconEmpty, IconInbox, IconSettings, Icon
 type Tab = "inbox" | "settings";
 type Filter = "all" | GroupId;
 
-const ME = { handle: "beauty.min", followers: "7.2만" };
+// 인스타를 연결하면 Meta에서 받아올 프로필. 사진이 없으면 이름의 첫 글자를 보여 준다.
+const ME = { name: "뷰티민", handle: "beauty.min", followers: "7.2만", picture: "" };
 
 type Sort = "urgent" | "latest";
 type Status = "all" | "unread";
@@ -263,9 +264,6 @@ export function InboxApp() {
           </span>
           PitchPouch
         </button>
-        <span className="caption">
-          @{ME.handle} · 팔로워 {ME.followers}
-        </span>
       </header>
 
       {open ? (
@@ -281,11 +279,33 @@ export function InboxApp() {
         />
       ) : tab === "inbox" ? (
         <section className="sec">
-          <h1 className="page-title">
-            DM <CountUp value={inPeriod.length} />개,
-            <br />
-            안 읽은 건 <CountUp value={unreadN} />개예요
-          </h1>
+          {connected ? (
+            <>
+              <div className="profile">
+                {ME.picture ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img className="avatar" src={ME.picture} alt="" />
+                ) : (
+                  <span className="avatar">{ME.name.slice(0, 1)}</span>
+                )}
+                <div>
+                  <b>{ME.name}</b>
+                  <small>
+                    @{ME.handle} · 팔로워 {ME.followers}
+                  </small>
+                </div>
+              </div>
+              <p className="counts">
+                DM <CountUp value={inPeriod.length} />개 · 안 읽은 건 <CountUp value={unreadN} />개
+              </p>
+            </>
+          ) : (
+            <h1 className="page-title">
+              DM <CountUp value={inPeriod.length} />개,
+              <br />
+              안 읽은 건 <CountUp value={unreadN} />개예요
+            </h1>
+          )}
           {dev && usage && (
             <div className="note" style={{ marginTop: 14 }}>
               방금 Jev {usage.jev}개 · {usage.model.replace("claude-", "")} {usage.ai}개 · 규칙 {usage.rules}개 (Jev 신뢰도 {Math.round(usage.threshold * 100)}% 이상만 Jev 판정)
