@@ -369,10 +369,15 @@ p { text-wrap: pretty; }
 .cal-head button:disabled { opacity: .3; }
 .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 2px; }
 .cal-dow { text-align: center; font-size: 12px; font-weight: 700; color: var(--muted); padding: 6px 0; }
-.cal-day { height: 40px; border: 0; background: none; font-size: 14px; font-weight: 600; color: var(--ink); border-radius: 12px; position: relative; isolation: isolate; }
-.cal-day.in { background: var(--brand-weak); color: var(--brand-ink); border-radius: 0; }
-/* 칸은 열 너비만큼 넓으니 고른 날짜 표시는 가운데 40×40 정사각형으로 그린다 */
-.cal-day.edge { color: #fff; font-weight: 800; }
-.cal-day.edge::before { content: ""; position: absolute; top: 0; left: 50%; width: 40px; height: 40px; margin-left: -20px; border-radius: 12px; background: var(--brand-ink); z-index: -1; }
+.cal-day { height: 40px; border: 0; background: none; padding: 0; font-size: 14px; font-weight: 600; color: var(--ink); position: relative; display: grid; place-items: center; }
+.cal-num { position: relative; z-index: 1; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; }
+/* 고른 날짜는 가운데 정사각형, 사이 날짜는 그보다 낮은 옅은 띠 */
+.cal-day.edge .cal-num { background: var(--brand-ink); color: #fff; font-weight: 800; }
+.cal-day.in { color: var(--brand-ink); }
+.cal-day.in::before, .cal-day.start::before, .cal-day.end::before { content: ""; position: absolute; top: 4px; bottom: 4px; left: 0; right: 0; background: var(--brand-weak); }
+.cal-day.start::before { left: 50%; }
+.cal-day.end::before { right: 50%; }
+.cal-day.in.row-first::before { left: 4px; border-radius: 10px 0 0 10px; }
+.cal-day.in.row-last::before { right: 4px; border-radius: 0 10px 10px 0; }
 .cal-day.off { color: var(--line); cursor: default; }
 .cal-day.today:not(.edge)::after { content: ""; position: absolute; left: 50%; bottom: 5px; width: 4px; height: 4px; margin-left: -2px; border-radius: 99px; background: var(--brand-ink); }
