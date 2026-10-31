@@ -33,12 +33,13 @@ export function RangeCalendar({
       return { y: Math.floor(t / 12), m: t % 12 };
     });
 
-  // 처음 누르거나 범위가 이미 정해졌으면 새 시작일, 그다음 누른 날이 시작일보다 늦으면 종료일, 빠르면 시작일을 바꾼다.
+  // 처음 누르거나 범위가 이미 정해졌으면 새 시작일. 그다음 누른 날과의 사이를 순서와 상관없이 범위로 잡는다.
+  // 같은 날을 두 번 누르면 선택을 취소한다.
   const pick = (k: string) => {
     if (k > today) return;
     if (!from || to) onChange(k, "");
-    else if (k < from) onChange(k, "");
-    else onChange(from, k);
+    else if (k === from) onChange("", "");
+    else onChange(k < from ? k : from, k < from ? from : k);
   };
 
   return (
@@ -68,15 +69,25 @@ export function RangeCalendar({
           const off = k > today;
           const edge = k === from || k === to;
           const inside = Boolean(from && to && k > from && k < to);
+          // 시작·끝 칸은 띠를 반쪽만 그려 사이 날짜의 띠와 이어지게 한다. 줄 첫 칸·끝 칸에서는 띠를 둥글게 닫는다.
+          const span = Boolean(from && to && from !== to);
+          const col = (lead + d - 1) % 7;
+          const cls = [
+            "cal-day",
+            off && "off",
+            edge && "edge",
+            inside && "in",
+            span && k === from && "start",
+            span && k === to && "end",
+            col === 0 && "row-first",
+            col === 6 && "row-last",
+            k === today && "today",
+          ]
+            .filter(Boolean)
+            .join(" ");
           return (
-            <button
-              key={k}
-              className={`cal-day${off ? " off" : ""}${edge ? " edge" : ""}${inside ? " in" : ""}${k === today ? " today" : ""}`}
-              disabled={off}
-              aria-pressed={edge}
-              onClick={() => pick(k)}
-            >
-              {d}
+            <button key={k} className={cls} disabled={off} aria-pressed={edge} onClick={() => pick(k)}>
+              <span className="cal-num">{d}</span>
             </button>
           );
         })}

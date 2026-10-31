@@ -5,7 +5,7 @@ export type Group = { id: GroupId; label: string; hint: string; tone: "new" | "o
 // 화면의 보관함 탭이 그대로 나오도록 "크리에이터가 다음에 할 행동"으로 묶는다.
 export const GROUPS: Group[] = [
   {
-    id: "gain", label: "수익 기회", hint: "조건을 보고 답할 제안", tone: "new",
+    id: "gain", label: "비즈니스", hint: "조건을 보고 답할 제안", tone: "new",
     desc: "돈이나 제품이 오가는 제안. 협찬, 유료 광고, 공동구매, 행사·섭외, 소속 영입처럼 크리에이터가 조건을 보고 수락 여부를 정하는 것",
   },
   {
@@ -17,7 +17,7 @@ export const GROUPS: Group[] = [
     desc: "크리에이터가 직접 해결해 줘야 하는 일. 내 콘텐츠나 제품에 대한 문의, 내가 파는 상품의 주문·배송·환불, 내 사진·영상 사용 허락 요청",
   },
   {
-    id: "junk", label: "걸러낼 것", hint: "안 봐도 되는 것", tone: "",
+    id: "junk", label: "스팸", hint: "안 봐도 되는 것", tone: "",
     desc: "답장할 가치가 없거나 해로운 것. 선입금을 요구하는 사기, 악플·성희롱, 나와 무관한 영업·스팸, 스토리에 달린 이모지 같은 짧은 반응",
   },
 ];
