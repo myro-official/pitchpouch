@@ -1,13 +1,15 @@
 import { connection } from "next/server";
 import { listDms } from "@/lib/dms";
+import { createClient } from "@/lib/supabase/server";
 
-// shortcut: 로그인이 없어 주소만 알면 누구나 연결된 계정의 DM을 본다. 실제 사용자를 받기 전에 로그인 뒤로 옮긴다.
+// shortcut: 연결된 인스타 계정이 하나라 로그인한 사람은 모두 같은 DM을 본다. 크리에이터가 여럿이 되면 계정별로 나눈다.
 export async function GET() {
   await connection();
   try {
+    const { data } = await (await createClient()).auth.getUser();
+    if (!data.user) return Response.json({ dms: [] }, { status: 401 });
     return Response.json({ dms: await listDms() });
   } catch (e) {
-    // 저장소가 아직 없으면 화면은 데모 DM만 보여 준다.
     console.error(e);
     return Response.json({ dms: [] }, { status: 503 });
   }

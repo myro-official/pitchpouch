@@ -1,15 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import {
-  type ClassifyResponse,
-  type ClassifyUsage,
-  DEMO,
-  type GroupId,
-  GROUPS,
-  type Msg,
-} from "@/lib/inbox";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { type ClassifyResponse, type ClassifyUsage, type GroupId, GROUPS, type Msg } from "@/lib/inbox";
 import { RangeCalendar } from "./RangeCalendar";
+import { createClient } from "@/lib/supabase/client";
 import { IconBack, IconChat, IconCheck, IconEmpty, IconSettings, IconShield } from "./icons";
 
 type Tab = "inbox" | "settings";
@@ -167,22 +161,35 @@ export function InboxApp() {
   const [usage, setUsage] = useState<ClassifyUsage | null>(null);
 
   const [live, setLive] = useState<Msg[]>([]);
-  // 웹훅이 저장한 실제 인스타 DM을 5초마다 가져와 데모 DM 앞에 둔다.
-  useEffect(() => {
-    const load = () =>
+  const [authed, setAuthed] = useState<boolean | null>(null); // null: 아직 모름
+  // 웹훅이 저장한 실제 인스타 DM을 5초마다 가져온다. 로그인 전이면 401이라 로그인 화면을 띄운다.
+  const loadLive = useCallback(
+    () =>
       fetch("/api/dms", { cache: "no-store" })
-        .then((r) => r.json())
+        .then((r) => {
+          setAuthed(r.status !== 401);
+          return r.ok ? r.json() : { dms: [] };
+        })
         .then((j) => setLive(j.dms ?? []))
-        .catch(() => {});
-    load();
-    const t = setInterval(load, 5000);
+        .catch(() => {}),
+    [],
+  );
+  useEffect(() => {
+    loadLive();
+    const t = setInterval(loadLive, 5000);
     return () => clearInterval(t);
-  }, []);
+  }, [loadLive]);
+  const logout = async () => {
+    await createClient().auth.signOut();
+    setLive([]);
+    setAuthed(false);
+    setTab("inbox");
+  };
 
   const now = useNow();
   const msgs = useMemo<Msg[]>(
     () =>
-      [...live, ...extra, ...DEMO].map((m) => ({
+      [...live, ...extra].map((m) => ({
         ...m,
         group: overrides[m.id] ?? m.group,
         read: m.read || readSet.has(m.id),
@@ -216,6 +223,15 @@ export function InboxApp() {
     setTab("settings");
     if (!history.state?.pp) history.pushState({ pp: 1 }, "");
     window.scrollTo({ top: 0 });
+  };
+  // 실패하면 화면에 띄울 문구를, 성공하면 null을 돌려준다.
+  const sendReply = async (m: Msg, text: string) => {
+    const res = await fetch(`/api/dms/${encodeURIComponent(m.id)}/reply`, { method: "POST", body: JSON.stringify({ text }) });
+    if (res.ok) {
+      showToast("메시지를 보냈어요");
+      return null;
+    }
+    return ((await res.json().catch(() => ({}))) as { error?: string }).error ?? "보내지 못했어요.";
   };
   const openMsg = (id: string) => {
     setReadSet((r) => new Set(r).add(id));
@@ -309,7 +325,10 @@ export function InboxApp() {
           onBack={() => history.back()}
           onChange={() => setSheet(true)}
           onGo={() => goChat(open)}
+          onSend={open.senderId ? (text) => sendReply(open, text) : undefined}
         />
+      ) : tab === "inbox" && authed === false ? (
+        <Login onDone={loadLive} />
       ) : tab === "inbox" ? (
         <section className="sec">
           {connected ? (
@@ -456,6 +475,7 @@ export function InboxApp() {
           onDev={setDev}
           onPaste={() => setSettingsView("paste")}
           onBack={() => history.back()}
+          onLogout={authed ? logout : undefined}
         />
       )}
 
@@ -554,6 +574,7 @@ function Detail({
   onBack,
   onChange,
   onGo,
+  onSend,
 }: {
   m: Msg;
   shown: boolean;
@@ -563,6 +584,7 @@ function Detail({
   onBack: () => void;
   onChange: () => void;
   onGo: () => void;
+  onSend?: (text: string) => Promise<string | null>;
 }) {
   const g = GROUPS.find((x) => x.id === m.group)!;
   return (
@@ -636,6 +658,8 @@ function Detail({
         )}
       </section>
 
+      {onSend && <Reply key={m.id} onSend={onSend} />}
+
       <div className="cta">
         <button className="btn ghost" onClick={onChange}>
           분류 바꾸기
@@ -657,6 +681,7 @@ function Settings({
   onDev,
   onPaste,
   onBack,
+  onLogout,
 }: {
   connected: boolean;
   linking: boolean;
@@ -666,6 +691,7 @@ function Settings({
   onDev: (on: boolean) => void;
   onPaste: () => void;
   onBack: () => void;
+  onLogout?: () => void;
 }) {
   return (
     <>
@@ -697,7 +723,106 @@ function Settings({
           </>
         )}
       </section>
+      {onLogout && (
+        <section className="sec">
+          <button className="btn ghost" onClick={onLogout}>
+            로그아웃
+          </button>
+        </section>
+      )}
     </>
+  );
+}
+
+function Reply({ onSend }: { onSend: (text: string) => Promise<string | null> }) {
+  const [text, setText] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const send = async () => {
+    setBusy(true);
+    setErr("");
+    const error = await onSend(text.trim());
+    setBusy(false);
+    if (error) return setErr(error);
+    setText("");
+  };
+
+  return (
+    <section className="sec">
+      <h2 className="sec-title">답장 보내기</h2>
+      <textarea
+        className="textarea"
+        rows={3}
+        maxLength={1000}
+        aria-label="보낼 메시지"
+        placeholder="인스타 DM으로 바로 보내요"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        style={{ marginTop: 12, minHeight: 96 }}
+      />
+      {err && (
+        <p className="note warn" role="alert" style={{ marginTop: 12 }}>
+          {err}
+        </p>
+      )}
+      <button className="btn" style={{ marginTop: 12 }} disabled={busy || !text.trim()} onClick={send}>
+        {busy ? "보내는 중" : "메시지 보내기"}
+      </button>
+    </section>
+  );
+}
+
+function Login({ onDone }: { onDone: () => void }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setErr("");
+    const { error } = await createClient().auth.signInWithPassword({ email: email.trim(), password });
+    setBusy(false);
+    if (error) return setErr("이메일이나 비밀번호가 맞지 않아요.");
+    onDone();
+  };
+
+  return (
+    <section className="sec">
+      <h1 className="page-title">로그인</h1>
+      <p className="lead">로그인하면 연결된 인스타 계정의 DM이 보여요.</p>
+      <form onSubmit={submit}>
+        <div className="field">
+          <label className="label" htmlFor="login-email">
+            이메일
+          </label>
+          <input id="login-email" className="input" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        </div>
+        <div className="field">
+          <label className="label" htmlFor="login-password">
+            비밀번호
+          </label>
+          <input
+            id="login-password"
+            className="input"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </div>
+        {err && (
+          <p className="note warn" role="alert" style={{ marginTop: 16 }}>
+            {err}
+          </p>
+        )}
+        <button className="btn" style={{ marginTop: 20 }} disabled={busy || !email.trim() || !password}>
+          {busy ? "로그인 중" : "로그인"}
+        </button>
+      </form>
+    </section>
   );
 }
 

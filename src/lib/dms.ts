@@ -19,6 +19,12 @@ export async function saveDm(id: string, data: DmData) {
   if (error) throw new Error(`[dms] ${error.code} ${error.message}`);
 }
 
+export async function getDm(id: string) {
+  const { data, error } = await db().from("dms").select("data, created_at").eq("id", id).maybeSingle<Omit<Row, "id">>();
+  if (error) throw new Error(`[dms] ${error.code} ${error.message}`);
+  return data ? { ...data.data, createdAt: data.created_at } : null;
+}
+
 export async function listDms(): Promise<Msg[]> {
   const { data, error } = await db().from("dms").select("id, data, created_at").order("created_at", { ascending: false }).limit(50);
   if (error) throw new Error(`[dms] ${error.code} ${error.message}`);
