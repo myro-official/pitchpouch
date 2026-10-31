@@ -363,6 +363,7 @@ p { text-wrap: pretty; }
 .icon-btn.on { background: var(--brand-weak); color: var(--brand-ink); }
 
 /* 기간 달력 */
+.cal { max-width: 340px; margin: 0 auto; }
 .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .cal-head b { font-size: 16px; font-weight: 800; letter-spacing: -0.02em; }
 .cal-head button { width: 36px; height: 36px; border: 0; border-radius: 10px; background: var(--fill); display: grid; place-items: center; color: var(--ink); }
