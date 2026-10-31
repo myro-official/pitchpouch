@@ -7,7 +7,8 @@ type Messaging = { sender: { id: string }; message?: { mid: string; text?: strin
 type Payload = { entry?: { messaging?: Messaging[] }[] };
 type Classified = Pick<Msg, "category" | "reply" | "urgency" | "terms" | "termsNote" | "reason">;
 
-const IG_API = "https://graph.instagram.com/v24.0";
+// Unified login(비즈니스 포트폴리오 시스템 사용자 토큰)이라 graph.instagram.com이 아니라 graph.facebook.com을 쓴다.
+const IG_API = "https://graph.facebook.com/v24.0";
 
 // Meta가 콜백 URL을 등록할 때 보내는 확인 요청
 export async function GET(request: Request) {
@@ -51,15 +52,19 @@ async function ingest(mid: string, senderId: string, text: string) {
   await saveDm(mid, data);
 }
 
-// 보낸 사람의 이름과 아이디. 우리 계정에 DM을 보낸 사람만 조회된다.
+// 보낸 사람의 아이디. 이 토큰으로는 프로필 조회(/{IGSID})가 막혀서 대화 참여자 목록에서 찾는다.
+// shortcut: 최근 대화 50개 안에서만 찾는다. 대화가 많아지면 다음 페이지까지 보거나 아이디를 저장해 둔다.
 async function profile(igsid: string): Promise<Pick<Msg, "name" | "handle">> {
-  const res = await fetch(`${IG_API}/${igsid}?fields=name,username&access_token=${process.env.IG_ACCESS_TOKEN}`);
+  const res = await fetch(
+    `${IG_API}/${process.env.IG_USER_ID}/conversations?platform=instagram&fields=participants&limit=50&access_token=${process.env.IG_ACCESS_TOKEN}`,
+  );
   if (!res.ok) {
-    console.warn("[ig] 프로필 조회 실패", res.status, await res.text());
+    console.warn("[ig] 보낸 사람 조회 실패", res.status, await res.text());
     return { name: "인스타 사용자", handle: "" };
   }
-  const p = (await res.json()) as { name?: string; username?: string };
-  return { name: p.name || p.username || "인스타 사용자", handle: p.username ?? "" };
+  const j = (await res.json()) as { data?: { participants: { data: { id: string; username: string }[] } }[] };
+  const handle = j.data?.flatMap((c) => c.participants.data).find((p) => p.id === igsid)?.username;
+  return handle ? { name: handle, handle } : { name: "인스타 사용자", handle: "" };
 }
 
 // shortcut: 분류는 형이 만드는 Jev + Claude 코드로 이 함수만 바꾼다. 그 전까지는 전부 "문의"로 넣는다.
