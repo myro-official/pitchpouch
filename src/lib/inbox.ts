@@ -78,8 +78,8 @@ export type Classified = {
     // 채택되지 않은 이유. low는 신뢰도 미만, unclear는 애매함 선택, risk는 Jev의 사기 신호 판정, veto는 위험 키워드
     why?: "ok" | "low" | "unclear" | "risk" | "veto";
   };
-  // 확신한 Jev 판정을 표본으로 Claude가 다시 본 결과. disagree면 Claude 판정을 썼다.
-  audit?: { disagree: boolean; jevGroup: GroupId };
+  // 확신한 Jev 판정을 표본으로 Claude가 다시 본 결과. 다르더라도 Jev 판정을 유지하고 불일치만 기록한다.
+  audit?: { disagree: boolean; jevGroup: GroupId; claudeGroup: GroupId };
 };
 
 export type ClassifyUsage = {

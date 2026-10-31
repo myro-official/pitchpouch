@@ -45,7 +45,12 @@ function takeBudget(kind: keyof typeof windows) {
 // "애매함" 선택지, 사기 위험 질문, 위험 키워드 규칙, 확신한 판정의 표본 검수를 더했다. 비교 측정 뒤에 기본값을 정한다.
 export type Profile = "v1" | "v2";
 export const DEFAULT_PROFILE: Profile = "v1";
-const AUDIT_RATE = 0.1;
+
+// 확신한 Jev 판정 중 이 비율만 Claude가 다시 봐서 1차 오류율을 잰다. Vercel 환경변수 AUDIT_RATE(0~1)로 켜고 끄며, 없으면 꺼짐이다.
+const envAuditRate = () => {
+  const n = Number(process.env.AUDIT_RATE);
+  return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0;
+};
 
 const DESC_V2: Record<GroupId, string> = {
   gain: "특정 크리에이터에게 금액·일정·제품 같은 개별 조건을 제시한 제안. 협찬, 유료 광고, 공동구매·제휴, 행사·섭외, 소속 영입. 링크 신청만 유도하는 단체 발송이나 선입금·등록비를 요구하는 것은 제외",
@@ -208,7 +213,7 @@ const fromClaude = (o: ClaudeOut, extra: Pick<Classified, "jev" | "audit">): Cla
 export async function classifyDm(text: string, opts: Options = {}): Promise<Outcome> {
   const threshold = opts.threshold ?? CONFIDENCE_THRESHOLD;
   const profile = opts.profile ?? DEFAULT_PROFILE;
-  const auditRate = opts.audit ?? (profile === "v2" ? AUDIT_RATE : 0);
+  const auditRate = opts.audit ?? envAuditRate();
   let jev: Classified["jev"];
   let jevInputTokens = 0;
   let inputTokens = 0;
@@ -237,17 +242,17 @@ export async function classifyDm(text: string, opts: Options = {}): Promise<Outc
           source: "jev",
           jev,
         };
-        // 확신한 판정도 일부는 Claude가 다시 봐서 1차 오류율을 계속 잰다. 다르면 Claude 판정을 쓴다.
+        // 확신한 판정도 일부는 Claude가 다시 봐서 1차 오류율을 계속 잰다.
+        // 다르다고 Claude가 맞는 건 아니라서(우리 데이터에서 Claude만 틀린 DM이 있었다) Jev 판정을 유지하고 불일치만 남긴다.
         if (auditRate > 0 && Math.random() < auditRate) {
           const c = await askClaude(text, profile);
           inputTokens += c.inputTokens;
           outputTokens += c.outputTokens;
           if (c.out) {
-            const disagree = c.out.group !== group;
-            const audit = { disagree, jevGroup: group };
-            return disagree
-              ? { result: fromClaude(c.out, { jev, audit }), jevInputTokens, inputTokens, outputTokens }
-              : { result: { ...jevResult, audit }, jevInputTokens, inputTokens, outputTokens };
+            const audit = { disagree: c.out.group !== group, jevGroup: group, claudeGroup: c.out.group };
+            // DM 내용은 개인정보라 남기지 않고 판정과 신뢰도만 남긴다
+            if (audit.disagree) console.warn("[audit] 불일치", { jev: group, claude: c.out.group, confidence: jev.confidence, profile });
+            return { result: { ...jevResult, audit }, jevInputTokens, inputTokens, outputTokens };
           }
         }
         return { result: jevResult, jevInputTokens, inputTokens, outputTokens };
