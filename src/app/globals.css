@@ -166,7 +166,8 @@ p { text-wrap: pretty; }
 .bar i { display: block; height: 100%; width: 40%; background: var(--brand); border-radius: 99px; animation: slide 1.1s ease-in-out infinite; }
 @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
 
-.toast { position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%); background: var(--ink); color: #fff; font-size: 14px; font-weight: 600; padding: 10px 16px; border-radius: 99px; z-index: 30; animation: sheet .35s var(--spring) both; }
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, 16px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.toast { position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%); background: var(--ink); color: #fff; font-size: 14px; font-weight: 600; padding: 10px 16px; border-radius: 99px; z-index: 30; animation: toast-in .35s var(--spring) both; white-space: nowrap; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
