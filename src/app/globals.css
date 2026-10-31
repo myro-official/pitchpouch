@@ -313,3 +313,4 @@ p { text-wrap: pretty; }
 .badge.pick.c-bad { background: var(--danger-weak); color: var(--danger); }
 .opt-desc { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-top: 2px; }
 .stat-row .stat b { font-size: 22px; }
+.dc.num { font-size: 15px; font-weight: 800; }

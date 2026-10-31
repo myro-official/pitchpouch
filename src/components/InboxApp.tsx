@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  AXES,
   CAT,
   CATEGORIES,
   type CategoryId,
@@ -13,9 +12,10 @@ import {
   GROUPS,
   type Msg,
 } from "@/lib/inbox";
-import { IconBack, IconChat, IconCheck, IconEmpty, IconInbox, IconLink, IconList, IconPaste, IconShield } from "./icons";
+import { IconBack, IconChat, IconCheck, IconEmpty, IconInbox, IconLink, IconPaste, IconShield } from "./icons";
+import { Dial } from "./Dial";
 
-type Tab = "inbox" | "paste" | "rules" | "connect";
+type Tab = "inbox" | "paste" | "connect";
 type Filter = "all" | GroupId;
 
 const ME = { handle: "beauty.min", followers: "7.2만" };
@@ -43,7 +43,7 @@ function Pills({ m }: { m: Msg }) {
 export function InboxApp() {
   const [tab, setTab] = useState<Tab>("inbox");
   const [filter, setFilter] = useState<Filter>("all");
-  const [onlyReply, setOnlyReply] = useState(false);
+  const [sub, setSub] = useState<CategoryId | null>(null);
   const [junkOpen, setJunkOpen] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [overrides, setOverrides] = useState<Record<string, CategoryId>>({});
@@ -100,7 +100,10 @@ export function InboxApp() {
   const urgent = msgs.filter((m) => m.urgency >= 2).length;
   const withTerms = msgs.filter((m) => m.terms).length;
   const inGroup = (g: GroupId) => msgs.filter((m) => CAT[m.category].group === g);
-  const visible = (g: GroupId) => inGroup(g).filter((m) => !onlyReply || m.reply).sort(byUrgency);
+  const visible = (g: GroupId) =>
+    inGroup(g)
+      .filter((m) => filter === "all" || !sub || m.category === sub)
+      .sort(byUrgency);
 
   const Row = ({ m }: { m: Msg }) => {
     const hidden = m.category === "abuse" && !revealed.has(m.id);
@@ -189,18 +192,22 @@ export function InboxApp() {
           <div className="filters">
             <div className="chips scroll">
               {filters.map(([id, label, n]) => (
-                <button key={id} className={`chip ${filter === id ? "on" : ""}`} onClick={() => setFilter(id)}>
+                <button key={id} className={`chip ${filter === id ? "on" : ""}`} onClick={() => {
+                    setFilter(id);
+                    setSub(null);
+                  }}>
                   {label} {n}
                 </button>
               ))}
             </div>
           </div>
-          <div className="group-row">
-            <button className={`switch ${onlyReply ? "on" : ""}`} onClick={() => setOnlyReply(!onlyReply)} aria-label="답장 필요만 보기">
-              <i />
-            </button>
-            답장 필요한 것만 보기
-          </div>
+          {filter !== "all" && sub && (
+            <div className="active-chips">
+              <button className="chip on" onClick={() => setSub(null)}>
+                {CAT[sub].label} ✕
+              </button>
+            </div>
+          )}
 
           {shown.map((g) => {
             const list = visible(g.id);
@@ -238,10 +245,24 @@ export function InboxApp() {
         </section>
       ) : tab === "paste" ? (
         <Paste onDone={addPasted} />
-      ) : tab === "rules" ? (
-        <Rules />
       ) : (
         <Connect connected={connected} linking={linking} onLink={link} onUnlink={() => setConnected(false)} />
+      )}
+
+      {tab === "inbox" && !open && filter !== "all" && (
+        <Dial
+          title={GROUPS.find((g) => g.id === filter)!.label}
+          items={[
+            { key: "all", label: "전체", count: inGroup(filter).length, on: !sub, act: () => setSub(null) },
+            ...CATEGORIES.filter((c) => c.group === filter).map((c) => ({
+              key: c.id,
+              label: c.label,
+              count: inGroup(filter).filter((m) => m.category === c.id).length,
+              on: sub === c.id,
+              act: () => setSub(sub === c.id ? null : c.id),
+            })),
+          ]}
+        />
       )}
 
       <nav className="tabbar">
@@ -249,7 +270,6 @@ export function InboxApp() {
           [
             ["inbox", "받은함", <IconInbox key="i" />],
             ["paste", "붙여넣기", <IconPaste key="p" />],
-            ["rules", "분류 기준", <IconList key="r" size={22} />],
             ["connect", "인스타 연결", <IconLink key="l" />],
           ] as const
         ).map(([key, label, icon]) => (
@@ -397,43 +417,6 @@ function Detail({
           <IconChat size={18} /> 채팅방으로 이동
         </button>
       </div>
-    </>
-  );
-}
-
-function Rules() {
-  return (
-    <>
-      <section className="sec">
-        <h1 className="page-title">분류 기준</h1>
-        <p className="lead">주제가 아니라 내가 다음에 할 행동으로 묶고, 비슷한 것은 정의로 갈라요.</p>
-      </section>
-      {GROUPS.map((g) => (
-        <section className="sec" key={g.id}>
-          <h2 className="sec-title">{g.label}</h2>
-          <p className="caption">{g.hint}</p>
-          <div style={{ marginTop: 8 }}>
-            {CATEGORIES.filter((c) => c.group === g.id).map((c) => (
-              <div className="pt" key={c.id}>
-                <b>{c.label}</b>
-                <p>{c.desc}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      ))}
-      <section className="sec">
-        <h2 className="sec-title">함께 읽는 3가지</h2>
-        <p className="lead">분류와는 따로 물어요. 급한 정도를 분류에 섞으면 주제 판정이 흐려져요.</p>
-        <div style={{ marginTop: 8 }}>
-          {AXES.map((a) => (
-            <div className="pt" key={a.key}>
-              <b>{a.q}</b>
-              <p>{a.scale}</p>
-            </div>
-          ))}
-        </div>
-      </section>
     </>
   );
 }
