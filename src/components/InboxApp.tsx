@@ -20,6 +20,7 @@ type Range = { preset: Preset; from: string; to: string };
 
 const PRESETS: Record<Exclude<Preset, "custom">, string> = { all: "전체 기간", today: "오늘", "7d": "최근 7일", "30d": "최근 30일" };
 const SORTS: Record<Sort, string> = { urgent: "급한 순", latest: "최신순" };
+const PAGE = 10;
 const DAY = 86_400_000;
 
 // 서버에서 만든 화면과 브라우저의 첫 화면이 같아야 해서, 서버는 고정 시각을 쓰고 브라우저는 마운트 뒤 실제 시각으로 바뀐다.
@@ -88,7 +89,7 @@ export function InboxApp() {
   const [range, setRange] = useState<Range>({ preset: "all", from: "", to: "" });
   const [draft, setDraft] = useState({ from: "", to: "" });
   const [readSet, setReadSet] = useState<Set<string>>(new Set());
-  const [limits, setLimits] = useState<Record<string, number>>({});
+  const [paged, setPaged] = useState({ key: "", n: 1 });
   const [toast, setToast] = useState("");
 
   const [live, setLive] = useState<Msg[]>([]);
@@ -147,10 +148,16 @@ export function InboxApp() {
     setSheet(false);
     setPanel(null);
     setTab("inbox");
+    setFilter("all");
   }, []);
   useEffect(() => {
-    window.addEventListener("popstate", goHome);
-    return () => window.removeEventListener("popstate", goHome);
+    // 돌아온 기록이 분류 화면이면 그 분류를 다시 연다
+    const onPop = (e: PopStateEvent) => {
+      goHome();
+      if (e.state?.group) setFilter(e.state.group);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
   }, [goHome]);
 
   const showToast = (msg: string) => {
@@ -179,7 +186,15 @@ export function InboxApp() {
   const openMsg = (id: string) => {
     setReadSet((r) => new Set(r).add(id));
     setOpenId(id);
-    if (!history.state?.pp) history.pushState({ pp: 1 }, "");
+    if (!history.state?.detail) history.pushState({ ...history.state, pp: 1, detail: 1 }, "");
+    window.scrollTo({ top: 0 });
+  };
+  // 분류 화면은 기록을 하나 쌓아서 뒤로 가기로 보관함에 돌아온다. 분류끼리 옮길 때는 기록을 바꿔치기한다.
+  const openGroup = (g: Filter) => {
+    if (g === "all") return history.state?.group ? history.back() : setFilter("all");
+    setFilter(g);
+    if (history.state?.group) history.replaceState({ pp: 1, group: g }, "");
+    else history.pushState({ pp: 1, group: g }, "");
     window.scrollTo({ top: 0 });
   };
 
@@ -188,6 +203,13 @@ export function InboxApp() {
   const scoped = inPeriod.filter((m) => (status === "all" ? true : status === "read" ? m.read : !m.read));
   const inGroup = (g: GroupId) => scoped.filter((m) => m.group === g);
   const visible = (g: GroupId) => inGroup(g).sort(sorter(sort));
+  // 분류·정렬·읽음 상태·기간이 바뀌면 1쪽부터 보여 준다. DM을 열었다 돌아오면 보던 쪽을 유지한다.
+  const pageKey = `${filter}|${sort}|${status}|${range.preset}|${range.from}|${range.to}`;
+  const page = paged.key === pageKey ? paged.n : 1;
+  const goPage = (n: number) => {
+    setPaged({ key: pageKey, n });
+    window.scrollTo({ top: 0 });
+  };
 
   const Row = ({ m }: { m: Msg }) => {
     const hidden = m.group === "junk" && !revealed.has(m.id);
@@ -219,18 +241,47 @@ export function InboxApp() {
   ];
 
   const shown = filter === "all" ? GROUPS : GROUPS.filter((g) => g.id === filter);
+  // 보관함에서는 툴바에, 분류 화면에서는 분류 제목 줄에 놓는다
+  const statusMenu = <Menu label="읽음 상태" value={status} options={statuses} onChange={setStatus} />;
+  const rangeSort = (
+    <>
+      <button
+        className={`tool-icon ${range.preset !== "all" ? "on" : ""}`}
+        aria-label={`기간, 지금은 ${rangeLabel(range)}`}
+        title={rangeLabel(range)}
+        onClick={() => {
+          setDraft(range.preset === "custom" ? { from: range.from, to: range.to } : { from: "", to: "" });
+          setPanel("range");
+        }}
+      >
+        <IconCalendar />
+      </button>
+      <Menu label="정렬" value={sort} options={(Object.keys(SORTS) as Sort[]).map((k) => [k, SORTS[k]])} onChange={setSort} icon={<IconSort />} />
+    </>
+  );
 
   return (
     <div className="app">
       <header className="top">
-        <button className="brand home-btn" onClick={goHome} aria-label="홈으로">
+        <button
+          className="brand home-btn"
+          onClick={() => {
+            goHome();
+            if (history.state?.group) history.replaceState({ ...history.state, group: undefined }, "");
+          }}
+          aria-label="홈으로"
+        >
           <span className="brand-mark" style={{ color: "var(--on-brand)" }}>
             <IconLogo />
           </span>
           PitchPouch
         </button>
-        {tab === "settings" && !open ? (
-          <button className="link-btn" style={{ display: "flex", alignItems: "center", gap: 2, fontSize: 15, height: 40 }} onClick={() => history.back()}>
+        {!open && (tab === "settings" || filter !== "all") ? (
+          <button
+            className="link-btn"
+            style={{ display: "flex", alignItems: "center", gap: 2, fontSize: 15, height: 40 }}
+            onClick={() => (tab === "settings" ? history.back() : openGroup("all"))}
+          >
             <IconBack size={18} /> 보관함
           </button>
         ) : (
@@ -253,8 +304,8 @@ export function InboxApp() {
       ) : tab === "inbox" && authed === false ? (
         <Login onDone={loadLive} onError={showToast} />
       ) : tab === "inbox" ? (
-        <section className="sec">
-          {profile ? (
+        <section className={filter === "all" ? "sec" : "sec sec-group"}>
+          {filter !== "all" ? null : profile ? (
             <div className="profile">
               {profile.picture ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -272,36 +323,43 @@ export function InboxApp() {
           ) : (
             <h1 className="page-title">보관함</h1>
           )}
-          <div className="toolbar">
-            <Menu label="분류" value={filter} options={filters.map(([id, label]) => [id, label])} onChange={setFilter} />
-            <Menu label="읽음 상태" value={status} options={statuses} onChange={setStatus} />
-            <span style={{ flex: 1 }} />
-            <button
-              className={`tool-icon ${range.preset !== "all" ? "on" : ""}`}
-              aria-label={`기간, 지금은 ${rangeLabel(range)}`}
-              title={rangeLabel(range)}
-              onClick={() => {
-                setDraft(range.preset === "custom" ? { from: range.from, to: range.to } : { from: "", to: "" });
-                setPanel("range");
-              }}
-            >
-              <IconCalendar />
-            </button>
-            <Menu label="정렬" value={sort} options={(Object.keys(SORTS) as Sort[]).map((k) => [k, SORTS[k]])} onChange={setSort} icon={<IconSort />} />
-          </div>
+          {filter === "all" && (
+            <div className="toolbar">
+              <Menu label="분류" value={filter} options={filters.map(([id, label]) => [id, label])} onChange={openGroup} />
+              {statusMenu}
+              <span style={{ flex: 1 }} />
+              {rangeSort}
+            </div>
+          )}
 
           {shown.map((g) => {
             const list = visible(g.id);
             const collapsed = filter === "all" && folded.has(g.id);
-            const lim = limits[g.id] ?? (filter === "all" ? 5 : 30);
+            const pages = Math.ceil(list.length / PAGE);
+            const cur = Math.min(page, Math.max(1, pages));
+            const rows = filter === "all" ? list.slice(0, 5) : list.slice((cur - 1) * PAGE, cur * PAGE);
             return (
               <div key={g.id} className="group-block">
                 <div className="title-row">
                   <p className="group-title">
-                    {g.label}
-                    <span>{list.length}</span>
+                    {filter === "all" ? (
+                      <button className="group-btn" onClick={() => openGroup(g.id)}>
+                        {g.label}
+                        <span>{list.length}</span>
+                      </button>
+                    ) : (
+                      <>
+                        {g.label}
+                        <span>{list.length}</span>
+                      </>
+                    )}
                   </p>
-                  {filter === "all" && (
+                  {filter !== "all" ? (
+                    <div className="toolbar">
+                      {statusMenu}
+                      {rangeSort}
+                    </div>
+                  ) : (
                     <button
                       className="link-btn"
                       style={{ marginTop: 18 }}
@@ -326,12 +384,16 @@ export function InboxApp() {
                         <div>해당하는 DM이 없어요</div>
                       </div>
                     ) : (
-                      list.slice(0, lim).map((m) => <Row key={m.id} m={m} />)
+                      rows.map((m) => <Row key={m.id} m={m} />)
                     )}
-                    {list.length > lim && (
-                      <button className="link-btn more" onClick={() => setLimits({ ...limits, [g.id]: lim + 30 })}>
-                        더보기
-                      </button>
+                    {filter !== "all" ? (
+                      <Pager page={cur} pages={pages} onPage={goPage} />
+                    ) : (
+                      list.length > rows.length && (
+                        <button className="link-btn more" onClick={() => openGroup(g.id)}>
+                          더보기
+                        </button>
+                      )
                     )}
                   </div>
                 )}
@@ -554,6 +616,28 @@ function Menu<T extends string>({
         </ul>
       )}
     </div>
+  );
+}
+
+// 쪽 번호는 지금 쪽을 가운데 두고 최대 5개까지 보여 주고, 양쪽 화살표는 첫 쪽과 마지막 쪽으로 간다
+function Pager({ page, pages, onPage }: { page: number; pages: number; onPage: (n: number) => void }) {
+  if (pages <= 1) return null;
+  const start = Math.max(1, Math.min(page - 2, pages - 4));
+  const nums = Array.from({ length: Math.min(5, pages) }, (_, i) => start + i);
+  return (
+    <nav className="pager" aria-label="쪽 이동">
+      <button disabled={page === 1} onClick={() => onPage(1)} aria-label="첫 쪽">
+        ‹
+      </button>
+      {nums.map((n) => (
+        <button key={n} className={n === page ? "on" : ""} aria-current={n === page ? "page" : undefined} onClick={() => onPage(n)}>
+          {n}
+        </button>
+      ))}
+      <button disabled={page === pages} onClick={() => onPage(pages)} aria-label="마지막 쪽">
+        ›
+      </button>
+    </nav>
   );
 }
 
