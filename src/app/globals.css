@@ -201,6 +201,12 @@ p { text-wrap: pretty; }
 /* PRO 표시, 정렬·필터, 알림함 */
 .pro { font-size: 10px; font-weight: 800; letter-spacing: .04em; background: var(--ink); color: #fff; border-radius: 6px; padding: 2px 6px; margin-left: 2px; }
 .filters { margin-top: 16px; }
+/* 보관함 위 분류·읽음 상태 드롭다운 */
+.toolbar { display: flex; gap: 8px; margin-top: 16px; }
+.toolbar .select {
+  width: auto; padding: 9px 34px 9px 12px; border-radius: 10px; font-size: 14px; font-weight: 700; color: var(--ink); cursor: pointer;
+  background: var(--fill) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234e5968' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center / 16px;
+}
 .seg .thumb { width: calc((100% - 8px - (var(--n, 3) - 1) * 4px) / var(--n, 3)); }
 .seg button { font-size: 13px; }
 .item .tx small.clash { color: var(--warn-ink); font-weight: 700; }

@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { type ClassifyResponse, type ClassifyUsage, type GroupId, GROUPS, type Msg } from "@/lib/inbox";
 import { RangeCalendar } from "./RangeCalendar";
 import { createClient } from "@/lib/supabase/client";
@@ -103,32 +103,6 @@ function Pills({ m }: { m: Msg }) {
       {m.terms && <i>조건 있음</i>}
     </div>
   );
-}
-
-// 0에서(값이 바뀌면 지금 값에서) 목표까지 빠르게 올라가는 숫자. 서버와 첫 화면을 맞추려고 0부터 시작한다.
-function CountUp({ value }: { value: number }) {
-  const [shown, setShown] = useState(0);
-  const from = useRef(0);
-  useEffect(() => {
-    const start = from.current;
-    let id = 0;
-    if (start === value || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      from.current = value;
-      id = requestAnimationFrame(() => setShown(value));
-      return () => cancelAnimationFrame(id);
-    }
-    const t0 = performance.now();
-    const tick = (t: number) => {
-      const p = Math.min(1, (t - t0) / 900);
-      const v = Math.round(start + (value - start) * (1 - Math.pow(1 - p, 3)));
-      from.current = v;
-      setShown(v);
-      if (p < 1) id = requestAnimationFrame(tick);
-    };
-    id = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(id);
-  }, [value]);
-  return <span style={{ fontVariantNumeric: "tabular-nums" }}>{shown}</span>;
 }
 
 export function InboxApp() {
@@ -276,7 +250,7 @@ export function InboxApp() {
               {!m.read && <i className="udot" aria-label="안 읽음" />}
               {m.name}
             </b>
-            <small>{hidden ? "걸러낸 메시지라 가려 뒀어요" : m.text}</small>
+            <small>{hidden ? "스팸으로 분류돼 가려 뒀어요" : m.text}</small>
             <Pills m={m} />
           </span>
           <span className="caption">{ago(m.minutesAgo, now)}</span>
@@ -290,7 +264,7 @@ export function InboxApp() {
     ...GROUPS.map((g) => [g.id, g.label, inGroup(g.id).length] as [Filter, string, number]),
   ];
   const statuses: [Status, string][] = [
-    ["all", "전체"],
+    ["all", "모든 DM"],
     ["unread", `안 읽음 ${unreadN}`],
   ];
 
@@ -343,16 +317,9 @@ export function InboxApp() {
                   </div>
                 </div>
               )}
-              <p className="counts">
-                DM <CountUp value={inPeriod.length} />개 · 안 읽은 건 <CountUp value={unreadN} />개
-              </p>
             </>
           ) : (
-            <h1 className="page-title">
-              DM <CountUp value={inPeriod.length} />개,
-              <br />
-              안 읽은 건 <CountUp value={unreadN} />개예요
-            </h1>
+            <h1 className="page-title">보관함</h1>
           )}
           {dev && usage && (
             <div className="note" style={{ marginTop: 14 }}>
@@ -363,23 +330,21 @@ export function InboxApp() {
             </div>
           )}
 
-          <div className="filters">
-            <div className="chips scroll">
+          <div className="toolbar">
+            <select className="select" aria-label="분류" value={filter} onChange={(e) => setFilter(e.target.value as Filter)}>
               {filters.map(([id, label, n]) => (
-                <button key={id} className={`chip ${filter === id ? "on" : ""}`} onClick={() => setFilter(id)}>
+                <option key={id} value={id}>
                   {label} {n}
-                </button>
+                </option>
               ))}
-            </div>
-          </div>
-
-          <div className="seg" style={{ marginTop: 14, ["--n" as string]: 2, ["--i" as string]: statuses.findIndex(([k]) => k === status) }}>
-            <div className="thumb" />
-            {statuses.map(([k, label]) => (
-              <button key={k} className={status === k ? "on" : ""} onClick={() => setStatus(k)}>
-                {label}
-              </button>
-            ))}
+            </select>
+            <select className="select" aria-label="읽음 상태" value={status} onChange={(e) => setStatus(e.target.value as Status)}>
+              {statuses.map(([k, label]) => (
+                <option key={k} value={k}>
+                  {label}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="title-row" style={{ marginTop: 10 }}>
@@ -577,7 +542,7 @@ function Detail({
           <h1 className="page-title" style={{ flex: 1 }}>
             {m.name}
           </h1>
-          <button className={`badge pick ${groupClass(m.group)}`} onClick={onChange}>
+          <button className={`badge pick ${groupClass(m.group)}`} onClick={onChange} aria-label={`분류 바꾸기, 지금은 ${g.label}`}>
             {g.label} ▾
           </button>
         </div>
@@ -589,7 +554,7 @@ function Detail({
           <div className="reply">{m.text}</div>
         ) : (
           <div className="reply">
-            걸러낸 메시지라 가려 뒀어요.
+            스팸으로 분류돼 가려 뒀어요.
             <button className="btn ghost sm" style={{ marginTop: 10, display: "flex" }} onClick={onReveal}>
               내용 보기
             </button>
@@ -618,12 +583,6 @@ function Detail({
         )}
         {onSend && <Reply key={m.id} onSend={onSend} />}
       </section>
-
-      <div className="cta">
-        <button className="btn ghost" onClick={onChange}>
-          분류 바꾸기
-        </button>
-      </div>
     </>
   );
 }
