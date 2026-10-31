@@ -2,7 +2,7 @@ export type GroupId = "gain" | "rel" | "todo" | "junk";
 
 export type Group = { id: GroupId; label: string; hint: string; tone: "new" | "ok" | "warn" | "" };
 
-// 화면의 받은함 탭이 그대로 나오도록 "크리에이터가 다음에 할 행동"으로 묶는다.
+// 화면의 보관함 탭이 그대로 나오도록 "크리에이터가 다음에 할 행동"으로 묶는다.
 export const GROUPS: Group[] = [
   { id: "gain", label: "수익 기회", hint: "조건을 보고 답할 제안", tone: "new" },
   { id: "rel", label: "관계", hint: "사람과 이어지는 연락", tone: "ok" },

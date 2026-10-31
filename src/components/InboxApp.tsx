@@ -42,7 +42,23 @@ export function InboxApp() {
   const [linking, setLinking] = useState(false);
   const [toast, setToast] = useState("");
 
-  const msgs = useMemo<Msg[]>(() => DEMO.map((m) => ({ ...m, category: overrides[m.id] ?? m.category })), [overrides]);
+  const [live, setLive] = useState<Msg[]>([]);
+  // 웹훅이 저장한 실제 인스타 DM을 5초마다 가져와 데모 DM 앞에 둔다.
+  useEffect(() => {
+    const load = () =>
+      fetch("/api/dms", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((j) => setLive(j.dms ?? []))
+        .catch(() => {});
+    load();
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  const msgs = useMemo<Msg[]>(
+    () => [...live, ...DEMO].map((m) => ({ ...m, category: overrides[m.id] ?? m.category })),
+    [live, overrides],
+  );
   const open = msgs.find((m) => m.id === openId) ?? null;
 
   const goHome = useCallback(() => {
@@ -212,7 +228,7 @@ export function InboxApp() {
       <nav className="tabbar">
         {(
           [
-            ["inbox", "받은함", <IconInbox key="i" />],
+            ["inbox", "보관함", <IconInbox key="i" />],
             ["rules", "분류 기준", <IconList key="r" size={22} />],
             ["connect", "인스타 연결", <IconLink key="l" />],
           ] as const
@@ -301,7 +317,7 @@ function Detail({
     <>
       <section className="sec" style={{ paddingBottom: 8 }}>
         <button className="link-btn" onClick={onBack} style={{ display: "flex", alignItems: "center", gap: 2, marginLeft: -6 }}>
-          <IconBack size={18} /> 받은함
+          <IconBack size={18} /> 보관함
         </button>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
           <h1 className="page-title" style={{ flex: 1 }}>

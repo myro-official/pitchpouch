@@ -87,7 +87,7 @@ p { text-wrap: pretty; }
 .chip { border: 0; background: var(--fill); border-radius: 99px; padding: 8px 12px; font-size: 13px; font-weight: 600; color: var(--sub); transition: background 0.2s, color 0.2s; }
 .chip.on { background: var(--brand); color: var(--on-brand); }
 
-/* 받은함 리스트 행 */
+/* 보관함 리스트 행 */
 .list { margin-top: 8px; }
 .item { display: flex; align-items: center; gap: 14px; padding: 14px 0; border: 0; background: none; width: 100%; text-align: left; }
 .item + .item { border-top: 1px solid var(--line); }
@@ -218,7 +218,7 @@ p { text-wrap: pretty; }
 .note.fresh { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; border: 0; margin-bottom: 14px; text-align: left; }
 .note.fresh span { font-size: 12px; opacity: .8; flex: 0 0 auto; }
 
-/* 받은함: 정렬·태그·묶기·비교 */
+/* 보관함: 정렬·태그·묶기·비교 */
 .title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .home-btn { border: 0; background: none; padding: 0; cursor: pointer; }
 .note.banner { display: block; width: 100%; border: 0; text-align: left; margin-top: 14px; cursor: pointer; }
@@ -297,7 +297,7 @@ p { text-wrap: pretty; }
 .sort-btn:active { background: var(--fill); }
 .sort-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 
-/* DM 받은함: 분류 pill, 행 이동 버튼 */
+/* DM 보관함: 분류 pill, 행 이동 버튼 */
 .pills i.c-new { background: var(--brand-weak); color: var(--brand-ink); }
 .pills i.c-ok { background: var(--ok-weak); color: var(--ok); }
 .pills i.c-warn { background: var(--warn-bg); color: var(--warn-ink); }

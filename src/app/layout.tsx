@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "PitchPouch",
-  description: "쏟아지는 DM을 다음에 할 행동으로 나눠, 돈 되는 제안부터 보여주는 크리에이터 받은함",
+  description: "쏟아지는 DM을 다음에 할 행동으로 나눠, 돈 되는 제안부터 보여주는 크리에이터 보관함",
 };
 
 export const viewport: Viewport = {
