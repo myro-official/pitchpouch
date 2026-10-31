@@ -15,7 +15,7 @@ type Tab = "inbox" | "settings";
 type Filter = "all" | GroupId;
 
 // 인스타를 연결하면 Meta에서 받아올 프로필. 사진이 없으면 이름의 첫 글자를 보여 준다.
-const ME = { name: "뷰티민", handle: "beauty.min", followers: "7.2만", picture: "" };
+const ME = { name: "뷰티민", handle: "beauty.min", followers: "7.2만", picture: "/profile.jpg" };
 
 type Sort = "urgent" | "latest";
 type Status = "all" | "unread";
@@ -55,6 +55,10 @@ function inRange(m: Msg, r: Range, now: number) {
   return ts >= from && ts <= to;
 }
 
+const ymd = (ts: number) => {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
 const short = (d: string) => (d ? `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}` : "");
 const rangeLabel = (r: Range) =>
   r.preset === "custom" ? `${short(r.from) || "처음"} ~ ${short(r.to) || "오늘"}` : PRESETS[r.preset];
@@ -211,6 +215,7 @@ export function InboxApp() {
     }, 900);
   };
 
+  const today = ymd(now);
   const inPeriod = msgs.filter((m) => inRange(m, range, now));
   const unreadN = inPeriod.filter((m) => !m.read).length;
   const needReply = inPeriod.filter((m) => m.reply).length;
@@ -510,11 +515,30 @@ export function InboxApp() {
         <div className="field row2" style={{ marginTop: 8 }}>
           <div>
             <label className="label">시작일</label>
-            <input className="input date" type="date" value={draft.from} onChange={(e) => setDraft({ ...draft, from: e.target.value })} />
+            <input
+              className="input date"
+              type="date"
+              value={draft.from}
+              max={draft.to && draft.to < today ? draft.to : today}
+              onChange={(e) => {
+                const max = draft.to && draft.to < today ? draft.to : today;
+                setDraft({ ...draft, from: e.target.value > max ? max : e.target.value });
+              }}
+            />
           </div>
           <div>
             <label className="label">종료일</label>
-            <input className="input date" type="date" value={draft.to} onChange={(e) => setDraft({ ...draft, to: e.target.value })} />
+            <input
+              className="input date"
+              type="date"
+              value={draft.to}
+              min={draft.from || undefined}
+              max={today}
+              onChange={(e) => {
+                const v = e.target.value;
+                setDraft({ ...draft, to: v > today ? today : draft.from && v && v < draft.from ? draft.from : v });
+              }}
+            />
           </div>
         </div>
         <button
