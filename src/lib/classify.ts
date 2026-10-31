@@ -18,6 +18,9 @@ export const costUsd = (inputTokens: number, outputTokens: number) => {
   return p ? (inputTokens * p.input + outputTokens * p.output) / 1_000_000 : null;
 };
 
+// Jev는 입력 토큰에만 과금하고 출력은 무료다. 2차 자료 기준 $0.042/100만 토큰이라 공식 요금표로 확인이 필요하다.
+export const JEV_USD_PER_M_INPUT = 0.042;
+
 const GROUP_IDS = GROUPS.map((g) => g.id) as [GroupId, ...GroupId[]];
 const label = (id: GroupId) => GROUPS.find((g) => g.id === id)!.label;
 

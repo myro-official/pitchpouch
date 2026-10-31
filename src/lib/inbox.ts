@@ -79,6 +79,7 @@ export type ClassifyUsage = {
   rules: number;
   threshold: number;
   jevInputTokens: number;
+  jevCostUsd: number;
   inputTokens: number;
   outputTokens: number;
   costUsd: number | null;

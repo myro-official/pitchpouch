@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CONFIDENCE_THRESHOLD, classifyDm, costUsd, MODEL, type Outcome } from "@/lib/classify";
+import { CONFIDENCE_THRESHOLD, classifyDm, costUsd, JEV_USD_PER_M_INPUT, MODEL, type Outcome } from "@/lib/classify";
 import type { ClassifyResponse } from "@/lib/inbox";
 
 const Body = z.object({
@@ -30,6 +30,7 @@ export async function POST(request: Request) {
       rules: count("rules"),
       threshold: CONFIDENCE_THRESHOLD,
       jevInputTokens: sum((o) => o.jevInputTokens),
+      jevCostUsd: (sum((o) => o.jevInputTokens) * JEV_USD_PER_M_INPUT) / 1_000_000,
       inputTokens,
       outputTokens,
       costUsd: costUsd(inputTokens, outputTokens),
