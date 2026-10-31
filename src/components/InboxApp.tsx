@@ -83,7 +83,7 @@ export function InboxApp() {
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
   const [sheet, setSheet] = useState(false);
   const [panel, setPanel] = useState<"range" | null>(null);
-  const [sort, setSort] = useState<Sort>("urgent");
+  const [sort, setSort] = useState<Sort>("latest");
   const [status, setStatus] = useState<Status>("all");
   const [range, setRange] = useState<Range>({ preset: "all", from: "", to: "" });
   const [draft, setDraft] = useState({ from: "", to: "" });
