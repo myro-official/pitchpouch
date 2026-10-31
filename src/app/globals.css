@@ -369,6 +369,12 @@ p { text-wrap: pretty; }
 /* 기간 달력 */
 /* 기간 창: 위 버튼 줄, 달력, 아래 선택 버튼을 같은 폭으로 가운데에 모은다 */
 .cal-wrap { max-width: 340px; margin: 0 auto; }
+/* 누를 때 브라우저가 칠하는 파란 강조(탭 하이라이트, 글자 선택, 포커스 테두리)를 끈다. 키보드 이동 때만 네이비 테두리 */
+.cal-wrap button { -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+.cal-wrap button:focus { outline: none; }
+.cal-wrap button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.cal-day:focus-visible { outline: none; }
+.cal-day:focus-visible .cal-num { box-shadow: 0 0 0 2px var(--brand); }
 .presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 14px; }
 .presets button { border: 0; background: var(--fill); color: var(--sub); font-size: 13px; font-weight: 700; padding: 9px 0; border-radius: 10px; }
 .presets button.on { background: var(--brand); color: var(--on-brand); }
