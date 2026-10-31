@@ -34,11 +34,11 @@ export function RangeCalendar({
     });
 
   // 처음 누르거나 범위가 이미 정해졌으면 새 시작일. 그다음 누른 날과의 사이를 순서와 상관없이 범위로 잡는다.
-  // 같은 날을 두 번 누르면 하루 선택으로 남는다.
+  // 같은 날을 두 번 누르면 선택을 취소한다.
   const pick = (k: string) => {
     if (k > today) return;
     if (!from || to) onChange(k, "");
-    else if (k === from) onChange(k, "");
+    else if (k === from) onChange("", "");
     else onChange(k < from ? k : from, k < from ? from : k);
   };
 

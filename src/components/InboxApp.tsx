@@ -68,14 +68,6 @@ const groupClass = (id: GroupId) => `c-${GROUPS.find((g) => g.id === id)?.tone |
 const sorter = (sort: Sort) => (a: Msg, b: Msg) =>
   sort === "latest" ? a.minutesAgo - b.minutesAgo : b.urgency - a.urgency || a.minutesAgo - b.minutesAgo;
 
-function Pills({ m }: { m: Msg }) {
-  return (
-    <div className="pills">
-      {m.reply && <i>답장 필요</i>}
-      {m.terms && <i>조건 있음</i>}
-    </div>
-  );
-}
 
 export function InboxApp() {
   const [tab, setTab] = useState<Tab>("inbox");
@@ -204,7 +196,6 @@ export function InboxApp() {
               {m.name}
             </b>
             {!hidden && <small>{m.text}</small>}
-            <Pills m={m} />
           </span>
           <span className="caption">{ago(m.minutesAgo, now)}</span>
         </button>
